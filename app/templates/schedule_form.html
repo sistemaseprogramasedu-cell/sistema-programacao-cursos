@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% set title = "Agendamento" %}
+{% block content %}
+<form class="form" method="post">
+  <div class="form-row">
+    <div>
+      <label>ID</label>
+      <input name="schedule_id" value="{{ schedule.id if schedule else '' }}" {% if schedule %}readonly{% endif %} required />
+    </div>
+    <div>
+      <label>Curso</label>
+      <select name="curso_id" required>
+        {% for course in courses %}
+          <option value="{{ course.id }}" {% if schedule and schedule.curso_id == course.id %}selected{% endif %}>{{ course.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Unidade Curricular</label>
+      <select name="unidade_id" required>
+        {% for unit in units %}
+          <option value="{{ unit.id }}" {% if schedule and schedule.unidade_id == unit.id %}selected{% endif %}>{{ unit.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div>
+      <label>Instrutor</label>
+      <select name="instrutor_id" required>
+        {% for instructor in instructors %}
+          <option value="{{ instructor.id }}" {% if schedule and schedule.instrutor_id == instructor.id %}selected{% endif %}>{{ instructor.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Sala</label>
+      <select name="sala_id" required>
+        {% for room in rooms %}
+          <option value="{{ room.id }}" {% if schedule and schedule.sala_id == room.id %}selected{% endif %}>{{ room.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Turno</label>
+      <select name="turno_id" required>
+        {% for shift in shifts %}
+          <option value="{{ shift.id }}" {% if schedule and schedule.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div>
+      <label>Data início</label>
+      <input name="data_inicio" value="{{ schedule.data_inicio if schedule else '' }}" required />
+    </div>
+    <div>
+      <label>Data fim</label>
+      <input name="data_fim" value="{{ schedule.data_fim if schedule else '' }}" required />
+    </div>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Salvar</button>
+    <a class="button ghost" href="/schedules">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
