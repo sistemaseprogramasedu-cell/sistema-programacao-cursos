@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% set title = "Curso" %}
+{% block content %}
+<form class="form" method="post">
+  <div class="form-row">
+    <div>
+      <label>Segmento</label>
+      <input name="segmento" value="{{ course.segmento if course else '' }}" required />
+    </div>
+    <div>
+      <label>Nome do curso</label>
+      <input name="nome" value="{{ course.nome if course else '' }}" required />
+    </div>
+  </div>
+  <div class="form-row">
+    <div>
+      <label>Carga horária total</label>
+      <input name="carga_horaria_total" value="{{ course.carga_horaria_total if course else '' }}" required />
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="ativo">
+        <option value="true" {% if course and course.ativo %}selected{% endif %}>Ativo</option>
+        <option value="false" {% if course and not course.ativo %}selected{% endif %}>Inativo</option>
+      </select>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Salvar</button>
+    <a class="button ghost" href="/courses">Cancelar</a>
+  </div>
+</form>
+
+{% if course %}
+  <div class="card">
+    <h3>Unidades curriculares</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nome</th>
+          <th>Carga horária</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for unit in units %}
+        <tr>
+          <td>{{ unit.id }}</td>
+          <td>{{ unit.nome }}</td>
+          <td>{{ unit.carga_horaria or '-' }}</td>
+          <td>
+            <form method="post" action="/curricular-units/{{ unit.id }}/delete">
+              <button class="button danger" type="submit">Excluir</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form class="form" method="post" action="/courses/{{ course.id }}/units">
+    <h3>Adicionar UC</h3>
+    <div class="form-row">
+      <div>
+        <label>Nome da UC</label>
+        <input name="nome" required />
+      </div>
+      <div>
+        <label>Carga horária</label>
+        <input name="carga_horaria" />
+      </div>
+      <div>
+        <label>Status</label>
+        <select name="ativo">
+          <option value="true" selected>Ativo</option>
+          <option value="false">Inativo</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="button" type="submit">Adicionar UC</button>
+    </div>
+  </form>
+
+  <form class="form" method="post" action="/courses/{{ course.id }}/units/batch">
+    <h3>Cadastro em lote de UCs</h3>
+    <label>Uma UC por linha (\"Nome da UC; carga_horaria\")</label>
+    <textarea name="linhas"></textarea>
+    <div class="actions">
+      <button class="button secondary" type="submit">Cadastrar em lote</button>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

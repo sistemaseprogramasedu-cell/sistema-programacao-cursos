@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% set title = "Criar Programação" %}
+{% block content %}
+<div class="actions">
+  <a class="button" href="/schedules/new">Nova oferta</a>
+  <a class="button secondary" href="/reports">Relatório</a>
+</div>
+<form class="filters" method="get">
+  <div>
+    <label>Data início</label>
+    <input name="data_inicio" value="{{ filters.data_inicio }}" />
+  </div>
+  <div>
+    <label>Data fim</label>
+    <input name="data_fim" value="{{ filters.data_fim }}" />
+  </div>
+  <div>
+    <label>Sala</label>
+    <select name="sala_id">
+      <option value="">Todas</option>
+      {% for room in rooms %}
+        <option value="{{ room.id }}" {% if filters.sala_id == room.id %}selected{% endif %}>{{ room.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Instrutor</label>
+    <select name="instrutor_id">
+      <option value="">Todos</option>
+      {% for instructor in instructors %}
+        <option value="{{ instructor.id }}" {% if filters.instrutor_id == instructor.id %}selected{% endif %}>{{ instructor.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Turno</label>
+    <select name="turno_id">
+      <option value="">Todos</option>
+      {% for shift in shifts %}
+        <option value="{{ shift.id }}" {% if filters.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Filtrar</button>
+    <a class="button ghost" href="/schedules">Limpar</a>
+  </div>
+</form>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Curso</th>
+      <th>Turma</th>
+      <th>Instrutor</th>
+      <th>Sala</th>
+      <th>Turno</th>
+      <th>Mês/Ano</th>
+      <th>Status</th>
+      <th>Período</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for schedule in schedules %}
+    <tr>
+      <td>{{ schedule.id }}</td>
+      <td>{{ schedule.curso_id }}</td>
+      <td>{{ schedule.numero_turma }}</td>
+      <td>{{ schedule.instrutor_id }}</td>
+      <td>{{ schedule.sala_id }}</td>
+      <td>{{ schedule.turno_id }}</td>
+      <td>{{ schedule.mes }}/{{ schedule.ano }}</td>
+      <td>{{ schedule.status }}</td>
+      <td>{{ schedule.data_inicio }} → {{ schedule.data_fim }}</td>
+      <td>
+        <div class="actions">
+          <a class="button secondary" href="/schedules/{{ schedule.id }}/edit">Editar</a>
+          <form method="post" action="/schedules/{{ schedule.id }}/delete">
+            <button class="button danger" type="submit">Excluir</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

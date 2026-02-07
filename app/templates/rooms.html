@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set title = "Salas" %}
+{% block content %}
+<div class="actions">
+  <a class="button" href="/rooms/new">Nova sala</a>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nome</th>
+      <th>Capacidade</th>
+      <th>Recursos</th>
+      <th>Status</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for room in rooms %}
+    <tr>
+      <td>{{ room.id }}</td>
+      <td>{{ room.nome }}</td>
+      <td>{{ room.capacidade }}</td>
+      <td>{{ room.recursos | join(', ') }}</td>
+      <td><span class="tag">{{ "Ativo" if room.ativo else "Inativo" }}</span></td>
+      <td>
+        <div class="actions">
+          <a class="button secondary" href="/rooms/{{ room.id }}/edit">Editar</a>
+          <form method="post" action="/rooms/{{ room.id }}/delete">
+            <button class="button danger" type="submit">Excluir</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

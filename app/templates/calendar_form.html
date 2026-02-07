@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set title = "Calendário" %}
+{% block content %}
+<form class="form" method="post">
+  <div class="form-row">
+    <div>
+      <label>Ano</label>
+      <input name="ano" value="{{ calendar.ano if calendar else '' }}" required />
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="ativo">
+        <option value="true" {% if calendar and calendar.ativo %}selected{% endif %}>Ativo</option>
+        <option value="false" {% if calendar and not calendar.ativo %}selected{% endif %}>Inativo</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Dias letivos (separados por vírgula)</h3>
+    <div class="form-row">
+      {% for month in months %}
+      <div>
+        <label>{{ month.label }}</label>
+        <input name="dias_{{ month.key }}" value="{{ month.value }}" />
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div>
+    <label>Feriados (datas ou dias separados por vírgula)</label>
+    <input name="feriados" value="{{ feriados if feriados else '' }}" />
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Salvar</button>
+    <a class="button ghost" href="/calendars">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% set title = "Cadastro em lote de UCs" %}
+{% block content %}
+<form class="form" method="post">
+  <div>
+    <label>Curso</label>
+    <select name="curso_id" required>
+      {% for course in courses %}
+        <option value="{{ course.id }}">{{ course.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Unidades curriculares (uma por linha: "Nome; horas")</label>
+    <textarea name="linhas">{{ linhas if linhas else '' }}</textarea>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Cadastrar em lote</button>
+    <a class="button ghost" href="/curricular-units">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

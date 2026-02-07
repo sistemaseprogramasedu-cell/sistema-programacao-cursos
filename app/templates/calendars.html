@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set title = "Calendários" %}
+{% block content %}
+<div class="actions">
+  <a class="button" href="/calendars/new">Novo calendário</a>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Ano</th>
+      <th>Dias letivos</th>
+      <th>Feriados</th>
+      <th>Status</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for calendar in calendars %}
+    <tr>
+      <td>{{ calendar.id }}</td>
+      <td>{{ calendar.ano }}</td>
+      <td>{{ calendar.dias_letivos | length }}</td>
+      <td>{{ calendar.feriados | length if calendar.feriados else 0 }}</td>
+      <td><span class="tag">{{ "Ativo" if calendar.ativo else "Inativo" }}</span></td>
+      <td>
+        <div class="actions">
+          <a class="button secondary" href="/calendars/{{ calendar.id }}/edit">Editar</a>
+          <form method="post" action="/calendars/{{ calendar.id }}/delete">
+            <button class="button danger" type="submit">Excluir</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

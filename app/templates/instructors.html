@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% set title = "Colaboradores" %}
+{% block content %}
+<div class="actions">
+  <a class="button" href="/collaborators/new">Novo colaborador</a>
+</div>
+<form class="filters" method="get">
+  <div>
+    <label>Tipo</label>
+    <select name="tipo">
+      <option value="">Todos</option>
+      <option value="instrutor" {% if filtro_tipo == "instrutor" %}selected{% endif %}>Instrutor</option>
+      <option value="analista" {% if filtro_tipo == "analista" %}selected{% endif %}>Analista</option>
+      <option value="assistente" {% if filtro_tipo == "assistente" %}selected{% endif %}>Assistente</option>
+    </select>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Filtrar</button>
+    <a class="button ghost" href="/collaborators">Limpar</a>
+  </div>
+</form>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nome</th>
+      <th>Tipo</th>
+      <th>Email</th>
+      <th>Especialidades</th>
+      <th>Limite semanal</th>
+      <th>Status</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for instructor in instructors %}
+    <tr>
+      <td>{{ instructor.id }}</td>
+      <td>{{ instructor.nome }}</td>
+      <td>{{ instructor.tipo }}</td>
+      <td>{{ instructor.email }}</td>
+      <td>{{ instructor.especialidades | join(', ') }}</td>
+      <td>{{ instructor.max_horas_semana or '-' }}</td>
+      <td><span class="tag">{{ "Ativo" if instructor.ativo else "Inativo" }}</span></td>
+      <td>
+        <div class="actions">
+          <a class="button secondary" href="/collaborators/{{ instructor.id }}/edit">Editar</a>
+          <form method="post" action="/collaborators/{{ instructor.id }}/delete">
+            <button class="button danger" type="submit">Excluir</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

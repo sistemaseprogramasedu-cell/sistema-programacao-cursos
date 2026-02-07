@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% set title = "Cronograma" %}
+{% block content %}
+<div class="card print-area">
+  <h3>Cronograma da Programação {{ schedule.id }}</h3>
+  <p>Este cronograma será gerado a partir da Programação, Calendário letivo e UCs do curso.</p>
+  <ul>
+    <li>Curso: {{ schedule.curso_id }}</li>
+    <li>Turma: {{ schedule.numero_turma }}</li>
+    <li>Período: {{ schedule.data_inicio }} → {{ schedule.data_fim }}</li>
+  </ul>
+  <p>Versão inicial: impressão manual (Ctrl+P).</p>
+</div>
+{% endblock %}

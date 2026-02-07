@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% set title = "Unidades Curriculares" %}
+{% block content %}
+<div class="actions">
+  <a class="button" href="/curricular-units/new">Nova UC</a>
+  <a class="button secondary" href="/curricular-units/batch">Cadastro em lote</a>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Curso</th>
+      <th>Nome</th>
+      <th>Carga Horária</th>
+      <th>Módulo</th>
+      <th>Status</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for unit in units %}
+    <tr>
+      <td>{{ unit.id }}</td>
+      <td>{{ unit.curso_id }}</td>
+      <td>{{ unit.nome }}</td>
+      <td>{{ unit.carga_horaria or '-' }}</td>
+      <td>{{ unit.modulo or '-' }}</td>
+      <td><span class="tag">{{ "Ativo" if unit.ativo else "Inativo" }}</span></td>
+      <td>
+        <div class="actions">
+          <a class="button secondary" href="/curricular-units/{{ unit.id }}/edit">Editar</a>
+          <form method="post" action="/curricular-units/{{ unit.id }}/delete">
+            <button class="button danger" type="submit">Excluir</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

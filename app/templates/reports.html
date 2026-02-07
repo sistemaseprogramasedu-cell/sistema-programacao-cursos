@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% set title = "Relatórios de Programação" %}
+{% block content %}
+<form class="filters" method="get">
+  <div>
+    <label>Tipo</label>
+    <select name="tipo">
+      <option value="mensal" {% if tipo == 'mensal' %}selected{% endif %}>Mensal</option>
+      <option value="trimestral" {% if tipo == 'trimestral' %}selected{% endif %}>Trimestral</option>
+      <option value="semestral" {% if tipo == 'semestral' %}selected{% endif %}>Semestral</option>
+      <option value="anual" {% if tipo == 'anual' %}selected{% endif %}>Anual</option>
+      <option value="custom" {% if tipo == 'custom' %}selected{% endif %}>Personalizado</option>
+    </select>
+  </div>
+  <div>
+    <label>Do dia</label>
+    <input name="data_inicio" value="{{ data_inicio }}" />
+  </div>
+  <div>
+    <label>Ao dia</label>
+    <input name="data_fim" value="{{ data_fim }}" />
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Gerar</button>
+    <a class="button ghost" href="/reports">Limpar</a>
+  </div>
+</form>
+<div class="card print-area">
+  <h3>Relatório</h3>
+  <p>Use Ctrl+P para imprimir ou salvar em PDF.</p>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Curso</th>
+        <th>Turma</th>
+        <th>Instrutor</th>
+        <th>Sala</th>
+        <th>Período</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for schedule in schedules %}
+      <tr>
+        <td>{{ schedule.id }}</td>
+        <td>{{ schedule.curso_id }}</td>
+        <td>{{ schedule.numero_turma }}</td>
+        <td>{{ schedule.instrutor_id }}</td>
+        <td>{{ schedule.sala_id }}</td>
+        <td>{{ schedule.data_inicio }} → {{ schedule.data_fim }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

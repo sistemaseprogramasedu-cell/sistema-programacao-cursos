@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% set title = "Cronogramas" %}
+{% block content %}
+<form class="filters" method="get">
+  <div>
+    <label>Ano</label>
+    <input name="ano" value="{{ filtros.ano }}" />
+  </div>
+  <div>
+    <label>Mês</label>
+    <input name="mes" value="{{ filtros.mes }}" />
+  </div>
+  <div>
+    <label>Turno</label>
+    <select name="turno_id">
+      <option value="">Todos</option>
+      {% for shift in shifts %}
+        <option value="{{ shift.id }}" {% if filtros.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Instrutor</label>
+    <select name="instrutor_id">
+      <option value="">Todos</option>
+      {% for collaborator in instrutores %}
+        <option value="{{ collaborator.id }}" {% if filtros.instrutor_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Analista</label>
+    <select name="analista_id">
+      <option value="">Todos</option>
+      {% for collaborator in analistas %}
+        <option value="{{ collaborator.id }}" {% if filtros.analista_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Assistente</label>
+    <select name="assistente_id">
+      <option value="">Todos</option>
+      {% for collaborator in assistentes %}
+        <option value="{{ collaborator.id }}" {% if filtros.assistente_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Filtrar</button>
+    <a class="button ghost" href="/cronogramas">Limpar</a>
+  </div>
+</form>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Curso</th>
+      <th>Turma</th>
+      <th>Período</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for schedule in schedules %}
+    <tr>
+      <td>{{ schedule.id }}</td>
+      <td>{{ schedule.curso_id }}</td>
+      <td>{{ schedule.numero_turma }}</td>
+      <td>{{ schedule.data_inicio }} → {{ schedule.data_fim }}</td>
+      <td>
+        <a class="button secondary" href="/cronogramas/{{ schedule.id }}">Cronograma</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

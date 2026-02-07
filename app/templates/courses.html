@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set title = "Cursos" %}
+{% block content %}
+<div class="actions">
+  <a class="button" href="/courses/new">Novo curso</a>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nome</th>
+      <th>Segmento</th>
+      <th>Carga Horária</th>
+      <th>Status</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for course in courses %}
+    <tr>
+      <td>{{ course.id }}</td>
+      <td>{{ course.nome }}</td>
+      <td>{{ course.segmento }}</td>
+      <td>{{ course.carga_horaria_total }}</td>
+      <td><span class="tag">{{ "Ativo" if course.ativo else "Inativo" }}</span></td>
+      <td>
+        <div class="actions">
+          <a class="button secondary" href="/courses/{{ course.id }}/edit">Editar</a>
+          <form method="post" action="/courses/{{ course.id }}/delete">
+            <button class="button danger" type="submit">Excluir</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
