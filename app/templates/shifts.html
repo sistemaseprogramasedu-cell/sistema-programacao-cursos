@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set title = "Turnos" %}
+{% block content %}
+<div class="actions">
+  <a class="button" href="/shifts/new">Novo turno</a>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nome</th>
+      <th>Horário</th>
+      <th>Dias</th>
+      <th>Status</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for shift in shifts %}
+    <tr>
+      <td>{{ shift.id }}</td>
+      <td>{{ shift.nome }}</td>
+      <td>{{ shift.horario_inicio }} - {{ shift.horario_fim }}</td>
+      <td>{{ shift.dias_semana | join(', ') }}</td>
+      <td><span class="tag">{{ "Ativo" if shift.ativo else "Inativo" }}</span></td>
+      <td>
+        <div class="actions">
+          <a class="button secondary" href="/shifts/{{ shift.id }}/edit">Editar</a>
+          <form method="post" action="/shifts/{{ shift.id }}/delete">
+            <button class="button danger" type="submit">Excluir</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

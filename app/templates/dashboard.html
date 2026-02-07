@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="cards">
+  <div class="card">
+    <h3>Cursos</h3>
+    <strong>{{ counts.courses }}</strong>
+  </div>
+  <div class="card">
+    <h3>UCs</h3>
+    <strong>{{ counts.units }}</strong>
+  </div>
+  <div class="card">
+    <h3>Instrutores</h3>
+    <strong>{{ counts.instructors }}</strong>
+  </div>
+  <div class="card">
+    <h3>Salas</h3>
+    <strong>{{ counts.rooms }}</strong>
+  </div>
+  <div class="card">
+    <h3>Turnos</h3>
+    <strong>{{ counts.shifts }}</strong>
+  </div>
+  <div class="card">
+    <h3>Calendários</h3>
+    <strong>{{ counts.calendars }}</strong>
+  </div>
+  <div class="card">
+    <h3>Agendamentos</h3>
+    <strong>{{ counts.schedules }}</strong>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% set title = "Calendário" %}
+{% block content %}
+<form class="form" method="post">
+  <div class="form-row">
+    <div>
+      <label>Ano</label>
+      <input name="ano" value="{{ calendar.ano if calendar else '' }}" {% if calendar %}readonly{% endif %} required />
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="ativo">
+        <option value="true" {% if calendar and calendar.ativo %}selected{% endif %}>Ativo</option>
+        <option value="false" {% if calendar and not calendar.ativo %}selected{% endif %}>Inativo</option>
+      </select>
+    </div>
+  </div>
+  <div>
+    <label>Períodos (JSON)</label>
+    <textarea name="periodos_json">{{ calendar.periodos | tojson(indent=2) if calendar else '[]' }}</textarea>
+  </div>
+  <div>
+    <label>Feriados (JSON)</label>
+    <textarea name="feriados_json">{{ calendar.feriados | tojson(indent=2) if calendar else '[]' }}</textarea>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Salvar</button>
+    <a class="button ghost" href="/calendars">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

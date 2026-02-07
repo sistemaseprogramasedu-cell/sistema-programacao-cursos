@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% set title = "Curso" %}
+{% block content %}
+<form class="form" method="post">
+  <div class="form-row">
+    <div>
+      <label>ID</label>
+      <input name="course_id" value="{{ course.id if course else '' }}" {% if course %}readonly{% endif %} required />
+    </div>
+    <div>
+      <label>Nome</label>
+      <input name="nome" value="{{ course.nome if course else '' }}" required />
+    </div>
+  </div>
+  <div class="form-row">
+    <div>
+      <label>Nível</label>
+      <input name="nivel" value="{{ course.nivel if course else '' }}" required />
+    </div>
+    <div>
+      <label>Carga horária total</label>
+      <input name="carga_horaria_total" value="{{ course.carga_horaria_total if course else '' }}" required />
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="ativo">
+        <option value="true" {% if course and course.ativo %}selected{% endif %}>Ativo</option>
+        <option value="false" {% if course and not course.ativo %}selected{% endif %}>Inativo</option>
+      </select>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Salvar</button>
+    <a class="button ghost" href="/courses">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% set title = "Sala" %}
+{% block content %}
+<form class="form" method="post">
+  <div class="form-row">
+    <div>
+      <label>ID</label>
+      <input name="room_id" value="{{ room.id if room else '' }}" {% if room %}readonly{% endif %} required />
+    </div>
+    <div>
+      <label>Nome</label>
+      <input name="nome" value="{{ room.nome if room else '' }}" required />
+    </div>
+  </div>
+  <div class="form-row">
+    <div>
+      <label>Capacidade</label>
+      <input name="capacidade" value="{{ room.capacidade if room else '' }}" required />
+    </div>
+    <div>
+      <label>Recursos (separados por vírgula)</label>
+      <input name="recursos" value="{{ room.recursos | join(', ') if room else '' }}" />
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="ativo">
+        <option value="true" {% if room and room.ativo %}selected{% endif %}>Ativo</option>
+        <option value="false" {% if room and not room.ativo %}selected{% endif %}>Inativo</option>
+      </select>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Salvar</button>
+    <a class="button ghost" href="/rooms">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

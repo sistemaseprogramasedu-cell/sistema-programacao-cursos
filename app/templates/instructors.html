@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% set title = "Instrutores" %}
+{% block content %}
+<div class="actions">
+  <a class="button" href="/instructors/new">Novo instrutor</a>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nome</th>
+      <th>Email</th>
+      <th>Especialidades</th>
+      <th>Limite semanal</th>
+      <th>Status</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for instructor in instructors %}
+    <tr>
+      <td>{{ instructor.id }}</td>
+      <td>{{ instructor.nome }}</td>
+      <td>{{ instructor.email }}</td>
+      <td>{{ instructor.especialidades | join(', ') }}</td>
+      <td>{{ instructor.max_horas_semana or '-' }}</td>
+      <td><span class="tag">{{ "Ativo" if instructor.ativo else "Inativo" }}</span></td>
+      <td>
+        <div class="actions">
+          <a class="button secondary" href="/instructors/{{ instructor.id }}/edit">Editar</a>
+          <form method="post" action="/instructors/{{ instructor.id }}/delete">
+            <button class="button danger" type="submit">Excluir</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
