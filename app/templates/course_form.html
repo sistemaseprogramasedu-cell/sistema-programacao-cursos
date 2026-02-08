@@ -31,6 +31,9 @@
   </div>
   <div class="actions">
     <button class="button" type="submit">Salvar</button>
+    {% if course %}
+      <a class="button secondary" href="/curricular-units/batch?course_id={{ course.id }}">Cadastrar UCs (lote)</a>
+    {% endif %}
     <a class="button ghost" href="/courses">Cancelar</a>
   </div>
 </form>

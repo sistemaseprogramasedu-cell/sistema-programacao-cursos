@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set title = "Cronogramas" %}
+{% block content %}
+<form class="filters" method="get">
+  <div>
+    <label>Ano</label>
+    <input name="ano" value="{{ filters.ano }}" />
+  </div>
+  <div>
+    <label>Mês</label>
+    <select name="mes">
+      <option value="">Todos</option>
+      {% for month in months %}
+        <option value="{{ month.value }}" {% if filters.mes == month.value %}selected{% endif %}>{{ month.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Turno</label>
+    <select name="turno_id">
+      <option value="">Todos</option>
+      {% for shift in shifts %}
+        <option value="{{ shift.id }}" {% if filters.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Instrutor</label>
+    <select name="instrutor_id">
+      <option value="">Todos</option>
+      {% for collaborator in instructors %}
+        <option value="{{ collaborator.id }}" {% if filters.instrutor_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Analista</label>
+    <select name="analista_id">
+      <option value="">Todos</option>
+      {% for collaborator in analysts %}
+        <option value="{{ collaborator.id }}" {% if filters.analista_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Assistente</label>
+    <select name="assistente_id">
+      <option value="">Todos</option>
+      {% for collaborator in assistants %}
+        <option value="{{ collaborator.id }}" {% if filters.assistente_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="actions">
+    <button class="button" type="submit">Filtrar</button>
+    <a class="button ghost" href="/chronograms">Limpar</a>
+  </div>
+</form>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Mês/Ano</th>
+      <th>Curso</th>
+      <th>Turma</th>
+      <th>Turno</th>
+      <th>Sala</th>
+      <th>Instrutor</th>
+      <th>Analista</th>
+      <th>Assistente</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td colspan="8">Nenhum cronograma gerado ainda. A geração/exportação será disponibilizada em breve.</td>
+      <td>
+        <button class="button" type="button" disabled>Cronograma</button>
+      </td>
+    </tr>
+  </tbody>
+</table>
+{% endblock %}

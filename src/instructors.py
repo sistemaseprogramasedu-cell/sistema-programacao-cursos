@@ -13,17 +13,33 @@ from .storage import (
 
 FILENAME = "instructors.json"
 REQUIRED_FIELDS = ["id", "nome", "email"]
+ALLOWED_ROLES = {"Instrutor", "Analista", "Assistente"}
+
+
+def _normalize_role(value: Any) -> str:
+    role = (value or "Instrutor").strip()
+    if role not in ALLOWED_ROLES:
+        raise ValidationError(f"Categoria inválida para colaborador: {role}")
+    return role
+
+
+def _with_default_role(payload: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(payload)
+    normalized["role"] = _normalize_role(normalized.get("role"))
+    return normalized
 
 
 def list_instructors() -> List[Dict[str, Any]]:
-    return load_items(FILENAME)
+    return [_with_default_role(item) for item in load_items(FILENAME)]
 
 
 def get_instructor(instructor_id: str) -> Dict[str, Any] | None:
-    return find_item(load_items(FILENAME), instructor_id)
+    item = find_item(load_items(FILENAME), instructor_id)
+    return _with_default_role(item) if item else None
 
 
 def create_instructor(payload: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _with_default_role(payload)
     require_fields(payload, REQUIRED_FIELDS)
     items = load_items(FILENAME)
     ensure_unique_id(items, payload["id"])
@@ -36,7 +52,8 @@ def update_instructor(instructor_id: str, updates: Dict[str, Any]) -> Dict[str, 
     items = load_items(FILENAME)
     instructor = find_item(items, instructor_id)
     if not instructor:
-        raise ValidationError(f"Instrutor não encontrado: {instructor_id}")
+        raise ValidationError(f"Colaborador não encontrado: {instructor_id}")
+    updates = _with_default_role(updates)
     instructor.update(updates)
     require_fields(instructor, REQUIRED_FIELDS)
     save_items(FILENAME, items)
@@ -47,6 +64,6 @@ def delete_instructor(instructor_id: str) -> None:
     items = load_items(FILENAME)
     instructor = find_item(items, instructor_id)
     if not instructor:
-        raise ValidationError(f"Instrutor não encontrado: {instructor_id}")
+        raise ValidationError(f"Colaborador não encontrado: {instructor_id}")
     items.remove(instructor)
     save_items(FILENAME, items)
