@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% set title = "Instrutores" %}
+{% set title = "Colaboradores" %}
 {% block content %}
 <div class="actions">
-  <a class="button" href="/instructors/new">Novo instrutor</a>
+  <a class="button" href="/collaborators/new">Novo colaborador</a>
 </div>
 <table class="table">
   <thead>
@@ -10,6 +10,7 @@
       <th>ID</th>
       <th>Nome</th>
       <th>Email</th>
+      <th>Categoria</th>
       <th>Especialidades</th>
       <th>Limite semanal</th>
       <th>Status</th>
@@ -22,13 +23,14 @@
       <td>{{ instructor.id }}</td>
       <td>{{ instructor.nome }}</td>
       <td>{{ instructor.email }}</td>
+      <td>{{ instructor.role }}</td>
       <td>{{ instructor.especialidades | join(', ') }}</td>
       <td>{{ instructor.max_horas_semana or '-' }}</td>
       <td><span class="tag">{{ "Ativo" if instructor.ativo else "Inativo" }}</span></td>
       <td>
         <div class="actions">
-          <a class="button secondary" href="/instructors/{{ instructor.id }}/edit">Editar</a>
-          <form method="post" action="/instructors/{{ instructor.id }}/delete">
+          <a class="button secondary" href="/collaborators/{{ instructor.id }}/edit">Editar</a>
+          <form method="post" action="/collaborators/{{ instructor.id }}/delete">
             <button class="button danger" type="submit">Excluir</button>
           </form>
         </div>

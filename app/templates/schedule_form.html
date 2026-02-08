@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set title = "Agendamento" %}
+{% set title = "Oferta" %}
 {% block content %}
 <form class="form" method="post">
   <div class="form-row">
@@ -26,7 +26,7 @@
   </div>
   <div class="form-row">
     <div>
-      <label>Instrutor</label>
+      <label>Colaborador</label>
       <select name="instrutor_id" required>
         {% for instructor in instructors %}
           <option value="{{ instructor.id }}" {% if schedule and schedule.instrutor_id == instructor.id %}selected{% endif %}>{{ instructor.nome }}</option>
@@ -62,7 +62,7 @@
   </div>
   <div class="actions">
     <button class="button" type="submit">Salvar</button>
-    <a class="button ghost" href="/schedules">Cancelar</a>
+    <a class="button ghost" href="/programming">Cancelar</a>
   </div>
 </form>
 {% endblock %}

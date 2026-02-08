@@ -25,6 +25,7 @@
       <td><span class="tag">{{ "Ativo" if course.ativo else "Inativo" }}</span></td>
       <td>
         <div class="actions">
+          <a class="button secondary" href="/curricular-units?course_id={{ course.id }}">UCs do curso</a>
           <a class="button secondary" href="/courses/{{ course.id }}/edit">Editar</a>
           <form method="post" action="/courses/{{ course.id }}/delete">
             <button class="button danger" type="submit">Excluir</button>

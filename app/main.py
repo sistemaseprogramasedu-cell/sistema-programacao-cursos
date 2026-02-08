@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Form, Request
@@ -262,23 +263,35 @@ def rooms_delete(request: Request, room_id: str):
     return RedirectResponse("/rooms", status_code=303)
 
 
+@app.get("/collaborators")
+def collaborators_list(request: Request):
+    return _render(request, "collaborators.html", instructors=list_instructors())
+
+
 @app.get("/instructors")
-def instructors_list(request: Request):
-    return _render(request, "instructors.html", instructors=list_instructors())
+def instructors_redirect():
+    return RedirectResponse("/collaborators", status_code=302)
+
+
+@app.get("/collaborators/new")
+def collaborators_new(request: Request):
+    return _render(request, "collaborator_form.html", instructor=None)
 
 
 @app.get("/instructors/new")
-def instructors_new(request: Request):
-    return _render(request, "instructor_form.html", instructor=None)
+def instructors_new_redirect():
+    return RedirectResponse("/collaborators/new", status_code=302)
 
 
+@app.post("/collaborators/new")
 @app.post("/instructors/new")
-def instructors_create(
+def collaborators_create(
     request: Request,
     instructor_id: str = Form(...),
     nome: str = Form(...),
     email: str = Form(...),
     telefone: str = Form(""),
+    role: str = Form("Instrutor"),
     especialidades: str = Form(""),
     max_horas_semana: str = Form(""),
     ativo: str = Form("true"),
@@ -288,31 +301,43 @@ def instructors_create(
         "nome": nome,
         "email": email,
         "telefone": telefone,
+        "role": role,
         "especialidades": [item.strip() for item in especialidades.split(",") if item.strip()],
         "max_horas_semana": _parse_float(max_horas_semana),
         "ativo": ativo == "true",
     }
     try:
         create_instructor(payload)
-        _flash(request, "Instrutor cadastrado com sucesso.")
-        return RedirectResponse("/instructors", status_code=303)
+        _flash(request, "Colaborador cadastrado com sucesso.")
+        return RedirectResponse("/collaborators", status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
-        return _render(request, "instructor_form.html", instructor=payload)
+        return _render(request, "collaborator_form.html", instructor=payload)
+
+
+@app.get("/collaborators/{instructor_id}/edit")
+def collaborators_edit(request: Request, instructor_id: str):
+    return _render(
+        request,
+        "collaborator_form.html",
+        instructor=get_instructor(instructor_id),
+    )
 
 
 @app.get("/instructors/{instructor_id}/edit")
-def instructors_edit(request: Request, instructor_id: str):
-    return _render(request, "instructor_form.html", instructor=get_instructor(instructor_id))
+def instructors_edit_redirect(instructor_id: str):
+    return RedirectResponse(f"/collaborators/{instructor_id}/edit", status_code=302)
 
 
+@app.post("/collaborators/{instructor_id}/edit")
 @app.post("/instructors/{instructor_id}/edit")
-def instructors_update(
+def collaborators_update(
     request: Request,
     instructor_id: str,
     nome: str = Form(...),
     email: str = Form(...),
     telefone: str = Form(""),
+    role: str = Form("Instrutor"),
     especialidades: str = Form(""),
     max_horas_semana: str = Form(""),
     ativo: str = Form("true"),
@@ -321,28 +346,30 @@ def instructors_update(
         "nome": nome,
         "email": email,
         "telefone": telefone,
+        "role": role,
         "especialidades": [item.strip() for item in especialidades.split(",") if item.strip()],
         "max_horas_semana": _parse_float(max_horas_semana),
         "ativo": ativo == "true",
     }
     try:
         update_instructor(instructor_id, updates)
-        _flash(request, "Instrutor atualizado com sucesso.")
-        return RedirectResponse("/instructors", status_code=303)
+        _flash(request, "Colaborador atualizado com sucesso.")
+        return RedirectResponse("/collaborators", status_code=303)
     except ValidationError as exc:
         updates["id"] = instructor_id
         _flash(request, str(exc), "error")
-        return _render(request, "instructor_form.html", instructor=updates)
+        return _render(request, "collaborator_form.html", instructor=updates)
 
 
+@app.post("/collaborators/{instructor_id}/delete")
 @app.post("/instructors/{instructor_id}/delete")
-def instructors_delete(request: Request, instructor_id: str):
+def collaborators_delete(request: Request, instructor_id: str):
     try:
         delete_instructor(instructor_id)
-        _flash(request, "Instrutor removido com sucesso.")
+        _flash(request, "Colaborador removido com sucesso.")
     except ValidationError as exc:
         _flash(request, str(exc), "error")
-    return RedirectResponse("/instructors", status_code=303)
+    return RedirectResponse("/collaborators", status_code=303)
 
 
 @app.get("/shifts")
@@ -496,12 +523,20 @@ def calendars_delete(request: Request, year: int):
 
 
 @app.get("/curricular-units")
-def units_list(request: Request):
+def units_list(request: Request, course_id: str = ""):
+    items = list_units()
+    course_name = None
+    if course_id:
+        items = [unit for unit in items if unit.get("curso_id") == course_id]
+        course = get_course(course_id)
+        course_name = course.get("nome") if course else None
     return _render(
         request,
         "curricular_units.html",
-        units=list_units(),
+        units=items,
         courses=list_courses(),
+        course_filter=course_id or None,
+        course_name=course_name,
     )
 
 
@@ -591,8 +626,13 @@ def units_delete(request: Request, unit_id: str):
 
 
 @app.get("/curricular-units/batch")
-def units_batch(request: Request):
-    return _render(request, "curricular_unit_batch.html", courses=list_courses())
+def units_batch(request: Request, course_id: str = ""):
+    return _render(
+        request,
+        "curricular_unit_batch.html",
+        courses=list_courses(),
+        course_id=course_id,
+    )
 
 
 @app.post("/curricular-units/batch")
@@ -604,14 +644,23 @@ def units_batch_create(
     try:
         created = create_units_batch_from_lines(curso_id, linhas)
         _flash(request, f"{len(created)} unidades curriculares cadastradas.")
-        return RedirectResponse("/curricular-units", status_code=303)
+        redirect_url = "/curricular-units"
+        if curso_id:
+            redirect_url = f"{redirect_url}?course_id={curso_id}"
+        return RedirectResponse(redirect_url, status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
-        return _render(request, "curricular_unit_batch.html", courses=list_courses(), linhas=linhas)
+        return _render(
+            request,
+            "curricular_unit_batch.html",
+            courses=list_courses(),
+            course_id=curso_id,
+            linhas=linhas,
+        )
 
 
-@app.get("/schedules")
-def schedules_list(
+@app.get("/programming")
+def programming_list(
     request: Request,
     data_inicio: str = "",
     data_fim: str = "",
@@ -650,7 +699,16 @@ def schedules_list(
         },
     )
 
+@app.get("/schedules")
+def schedules_redirect(request: Request):
+    query = request.url.query
+    url = "/programming"
+    if query:
+        url = f"{url}?{query}"
+    return RedirectResponse(url, status_code=302)
 
+
+@app.get("/programming/new")
 @app.get("/schedules/new")
 def schedules_new(request: Request):
     return _render(
@@ -665,6 +723,7 @@ def schedules_new(request: Request):
     )
 
 
+@app.post("/programming/new")
 @app.post("/schedules/new")
 def schedules_create(
     request: Request,
@@ -689,8 +748,8 @@ def schedules_create(
     }
     try:
         create_schedule(payload)
-        _flash(request, "Agendamento criado com sucesso.")
-        return RedirectResponse("/schedules", status_code=303)
+        _flash(request, "Oferta criada com sucesso.")
+        return RedirectResponse("/programming", status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
         return _render(
@@ -705,6 +764,7 @@ def schedules_create(
         )
 
 
+@app.get("/programming/{schedule_id}/edit")
 @app.get("/schedules/{schedule_id}/edit")
 def schedules_edit(request: Request, schedule_id: str):
     return _render(
@@ -719,6 +779,7 @@ def schedules_edit(request: Request, schedule_id: str):
     )
 
 
+@app.post("/programming/{schedule_id}/edit")
 @app.post("/schedules/{schedule_id}/edit")
 def schedules_update(
     request: Request,
@@ -742,8 +803,8 @@ def schedules_update(
     }
     try:
         update_schedule(schedule_id, updates)
-        _flash(request, "Agendamento atualizado com sucesso.")
-        return RedirectResponse("/schedules", status_code=303)
+        _flash(request, "Oferta atualizada com sucesso.")
+        return RedirectResponse("/programming", status_code=303)
     except ValidationError as exc:
         updates["id"] = schedule_id
         _flash(request, str(exc), "error")
@@ -759,11 +820,61 @@ def schedules_update(
         )
 
 
+@app.post("/programming/{schedule_id}/delete")
 @app.post("/schedules/{schedule_id}/delete")
 def schedules_delete(request: Request, schedule_id: str):
     try:
         delete_schedule(schedule_id)
-        _flash(request, "Agendamento removido com sucesso.")
+        _flash(request, "Oferta removida com sucesso.")
     except ValidationError as exc:
         _flash(request, str(exc), "error")
-    return RedirectResponse("/schedules", status_code=303)
+    return RedirectResponse("/programming", status_code=303)
+
+
+@app.get("/chronograms")
+def chronograms_list(
+    request: Request,
+    ano: str = "",
+    mes: str = "",
+    turno_id: str = "",
+    instrutor_id: str = "",
+    analista_id: str = "",
+    assistente_id: str = "",
+):
+    current_year = str(date.today().year)
+    filters = {
+        "ano": ano or current_year,
+        "mes": mes,
+        "turno_id": turno_id,
+        "instrutor_id": instrutor_id,
+        "analista_id": analista_id,
+        "assistente_id": assistente_id,
+    }
+    months = [
+        {"value": "1", "label": "Janeiro"},
+        {"value": "2", "label": "Fevereiro"},
+        {"value": "3", "label": "Março"},
+        {"value": "4", "label": "Abril"},
+        {"value": "5", "label": "Maio"},
+        {"value": "6", "label": "Junho"},
+        {"value": "7", "label": "Julho"},
+        {"value": "8", "label": "Agosto"},
+        {"value": "9", "label": "Setembro"},
+        {"value": "10", "label": "Outubro"},
+        {"value": "11", "label": "Novembro"},
+        {"value": "12", "label": "Dezembro"},
+    ]
+    collaborators = list_instructors()
+    instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
+    analysts = [item for item in collaborators if item.get("role") == "Analista"]
+    assistants = [item for item in collaborators if item.get("role") == "Assistente"]
+    return _render(
+        request,
+        "chronograms.html",
+        filters=filters,
+        months=months,
+        shifts=list_shifts(),
+        instructors=instructors,
+        analysts=analysts,
+        assistants=assistants,
+    )

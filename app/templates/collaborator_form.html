@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set title = "Instrutor" %}
+{% set title = "Colaborador" %}
 {% block content %}
 <form class="form" method="post">
   <div class="form-row">
@@ -22,6 +22,15 @@
       <input name="telefone" value="{{ instructor.telefone if instructor else '' }}" />
     </div>
     <div>
+      <label>Categoria</label>
+      <select name="role">
+        {% set role = instructor.role if instructor else 'Instrutor' %}
+        <option value="Instrutor" {% if role == "Instrutor" %}selected{% endif %}>Instrutor</option>
+        <option value="Analista" {% if role == "Analista" %}selected{% endif %}>Analista</option>
+        <option value="Assistente" {% if role == "Assistente" %}selected{% endif %}>Assistente</option>
+      </select>
+    </div>
+    <div>
       <label>Especialidades (separadas por vírgula)</label>
       <input name="especialidades" value="{{ instructor.especialidades | join(', ') if instructor else '' }}" />
     </div>
@@ -39,7 +48,7 @@
   </div>
   <div class="actions">
     <button class="button" type="submit">Salvar</button>
-    <a class="button ghost" href="/instructors">Cancelar</a>
+    <a class="button ghost" href="/collaborators">Cancelar</a>
   </div>
 </form>
 {% endblock %}

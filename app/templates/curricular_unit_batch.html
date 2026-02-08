@@ -6,7 +6,7 @@
     <label>Curso</label>
     <select name="curso_id" required>
       {% for course in courses %}
-        <option value="{{ course.id }}">{{ course.nome }}</option>
+        <option value="{{ course.id }}" {% if course_id == course.id %}selected{% endif %}>{{ course.nome }}</option>
       {% endfor %}
     </select>
   </div>

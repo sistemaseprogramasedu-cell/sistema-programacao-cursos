@@ -62,7 +62,7 @@ def update_schedule(schedule_id: str, updates: Dict[str, Any]) -> Dict[str, Any]
     items = load_items(FILENAME)
     schedule = find_item(items, schedule_id)
     if not schedule:
-        raise ValidationError(f"Agendamento não encontrado: {schedule_id}")
+        raise ValidationError(f"Programação não encontrada: {schedule_id}")
     schedule.update(updates)
     require_fields(schedule, REQUIRED_FIELDS)
     _validate_references(schedule)
@@ -76,7 +76,7 @@ def delete_schedule(schedule_id: str) -> None:
     items = load_items(FILENAME)
     schedule = find_item(items, schedule_id)
     if not schedule:
-        raise ValidationError(f"Agendamento não encontrado: {schedule_id}")
+        raise ValidationError(f"Programação não encontrada: {schedule_id}")
     items.remove(schedule)
     save_items(FILENAME, items)
 
@@ -84,7 +84,7 @@ def delete_schedule(schedule_id: str) -> None:
 def _validate_references(payload: Dict[str, Any]) -> None:
     _ensure_exists(COURSES_FILE, payload["curso_id"], "Curso")
     _ensure_exists(UNITS_FILE, payload["unidade_id"], "Unidade curricular")
-    _ensure_exists(INSTRUCTORS_FILE, payload["instrutor_id"], "Instrutor")
+    _ensure_exists(INSTRUCTORS_FILE, payload["instrutor_id"], "Colaborador")
     _ensure_exists(ROOMS_FILE, payload["sala_id"], "Sala")
     _ensure_exists(SHIFTS_FILE, payload["turno_id"], "Turno")
 
@@ -162,7 +162,7 @@ def _validate_conflicts(existing: List[Dict[str, Any]], payload: Dict[str, Any])
         if item.get("sala_id") == payload["sala_id"]:
             raise ValidationError("Conflito de sala: horário já reservado.")
         if item.get("instrutor_id") == payload["instrutor_id"]:
-            raise ValidationError("Conflito de instrutor: horário já reservado.")
+            raise ValidationError("Conflito de colaborador: horário já reservado.")
 
 
 def _validate_instructor_workload(
@@ -173,7 +173,7 @@ def _validate_instructor_workload(
     instructors = load_items(INSTRUCTORS_FILE)
     instructor = find_item(instructors, payload["instrutor_id"])
     if not instructor:
-        raise ValidationError(f"Instrutor não encontrado: {payload['instrutor_id']}")
+        raise ValidationError(f"Colaborador não encontrado: {payload['instrutor_id']}")
     limit = instructor.get("max_horas_semana")
     if limit is None:
         return
@@ -190,7 +190,7 @@ def _validate_instructor_workload(
 
     if total > float(limit):
         raise ValidationError(
-            "Limite de carga horária semanal excedido para o instrutor."
+            "Limite de carga horária semanal excedido para o colaborador."
         )
 
 

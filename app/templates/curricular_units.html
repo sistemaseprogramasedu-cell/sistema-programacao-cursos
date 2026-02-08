@@ -1,9 +1,15 @@
 {% extends "base.html" %}
 {% set title = "Unidades Curriculares" %}
 {% block content %}
+{% if course_filter %}
+  <p>Exibindo UCs do curso {{ course_name or course_filter }}.</p>
+{% endif %}
 <div class="actions">
   <a class="button" href="/curricular-units/new">Nova UC</a>
-  <a class="button secondary" href="/curricular-units/batch">Cadastro em lote</a>
+  <a class="button secondary" href="/curricular-units/batch{% if course_filter %}?course_id={{ course_filter }}{% endif %}">Cadastro em lote</a>
+  {% if course_filter %}
+    <a class="button ghost" href="/curricular-units">Ver todas</a>
+  {% endif %}
 </div>
 <table class="table">
   <thead>

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% set title = "Agendamentos" %}
+{% set title = "Programação" %}
 {% block content %}
 <div class="actions">
-  <a class="button" href="/schedules/new">Novo agendamento</a>
+  <a class="button" href="/programming/new">Nova oferta</a>
 </div>
 <form class="filters" method="get">
   <div>
@@ -23,7 +23,7 @@
     </select>
   </div>
   <div>
-    <label>Instrutor</label>
+    <label>Colaborador</label>
     <select name="instrutor_id">
       <option value="">Todos</option>
       {% for instructor in instructors %}
@@ -42,7 +42,7 @@
   </div>
   <div class="actions">
     <button class="button" type="submit">Filtrar</button>
-    <a class="button ghost" href="/schedules">Limpar</a>
+    <a class="button ghost" href="/programming">Limpar</a>
   </div>
 </form>
 <table class="table">
@@ -51,7 +51,7 @@
       <th>ID</th>
       <th>Curso</th>
       <th>UC</th>
-      <th>Instrutor</th>
+      <th>Colaborador</th>
       <th>Sala</th>
       <th>Turno</th>
       <th>Período</th>
@@ -70,8 +70,8 @@
       <td>{{ schedule.data_inicio }} → {{ schedule.data_fim }}</td>
       <td>
         <div class="actions">
-          <a class="button secondary" href="/schedules/{{ schedule.id }}/edit">Editar</a>
-          <form method="post" action="/schedules/{{ schedule.id }}/delete">
+          <a class="button secondary" href="/programming/{{ schedule.id }}/edit">Editar</a>
+          <form method="post" action="/programming/{{ schedule.id }}/delete">
             <button class="button danger" type="submit">Excluir</button>
           </form>
         </div>
