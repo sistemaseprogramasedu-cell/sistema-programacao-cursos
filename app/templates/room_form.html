@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% set title = "Sala" %}
+{% set title = "Ambiente" %}
 {% block content %}
 <form class="form" method="post">
   <div class="form-row">
     <div>
       <label>ID</label>
-      <input name="room_id" value="{{ room.id if room else '' }}" {% if room %}readonly{% endif %} required />
+      <input name="room_id" value="{{ room.id if room else room_id }}" readonly required />
     </div>
     <div>
       <label>Nome</label>
@@ -16,6 +16,14 @@
     <div>
       <label>Capacidade</label>
       <input name="capacidade" value="{{ room.capacidade if room else '' }}" required />
+    </div>
+    <div>
+      <label>Pavimento</label>
+      {% set floor = room.pavimento if room else '' %}
+      <select name="pavimento" required>
+        <option value="Térreo" {% if floor == "Térreo" %}selected{% endif %}>Térreo</option>
+        <option value="1º Piso" {% if floor == "1º Piso" %}selected{% endif %}>1º Piso</option>
+      </select>
     </div>
     <div>
       <label>Recursos (separados por vírgula)</label>

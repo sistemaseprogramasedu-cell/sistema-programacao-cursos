@@ -5,11 +5,15 @@
   <div class="form-row">
     <div>
       <label>ID</label>
-      <input name="instructor_id" value="{{ instructor.id if instructor else '' }}" {% if instructor %}readonly{% endif %} required />
+      <input name="instructor_id" value="{{ instructor.id if instructor else instructor_id }}" readonly required />
     </div>
     <div>
-      <label>Nome</label>
-      <input name="nome" value="{{ instructor.nome if instructor else '' }}" required />
+      <label>Nome Completo</label>
+      <input name="nome" id="nome-completo" value="{{ instructor.nome if instructor else '' }}" required />
+    </div>
+    <div>
+      <label>Nome e Sobrenome</label>
+      <input name="nome_sobrenome" id="nome-sobrenome" value="{{ instructor.nome_sobrenome if instructor else '' }}" readonly required />
     </div>
     <div>
       <label>Email</label>
@@ -19,7 +23,7 @@
   <div class="form-row">
     <div>
       <label>Telefone</label>
-      <input name="telefone" value="{{ instructor.telefone if instructor else '' }}" />
+      <input name="telefone" value="{{ instructor.telefone if instructor else '' }}" required />
     </div>
     <div>
       <label>Categoria</label>
@@ -31,7 +35,7 @@
       </select>
     </div>
     <div>
-      <label>Especialidades (separadas por vírgula)</label>
+      <label>Especialidades (use vírgula)</label>
       <input name="especialidades" value="{{ instructor.especialidades | join(', ') if instructor else '' }}" />
     </div>
     <div>
@@ -51,4 +55,27 @@
     <a class="button ghost" href="/collaborators">Cancelar</a>
   </div>
 </form>
+
+<script>
+  const nomeCompleto = document.getElementById("nome-completo");
+  const nomeSobrenome = document.getElementById("nome-sobrenome");
+
+  function gerarNomeSobrenome() {
+    const partes = nomeCompleto.value.trim().split(/\s+/).filter(Boolean);
+    if (!partes.length) {
+      nomeSobrenome.value = "";
+      return;
+    }
+    if (partes.length === 1) {
+      nomeSobrenome.value = partes[0];
+      return;
+    }
+    nomeSobrenome.value = `${partes[0]} ${partes[partes.length - 1]}`;
+  }
+
+  nomeCompleto.addEventListener("input", gerarNomeSobrenome);
+  if (!nomeSobrenome.value) {
+    gerarNomeSobrenome();
+  }
+</script>
 {% endblock %}

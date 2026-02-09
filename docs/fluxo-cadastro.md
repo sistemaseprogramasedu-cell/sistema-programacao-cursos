@@ -9,9 +9,9 @@ Os arquivos ficam no diretório `data/` e armazenam listas (`items`) com objetos
 ### Cursos (`data/courses.json`)
 
 Campos recomendados:
-- `id`: identificador único (ex.: `CUR-001`)
+- `id`: identificador único (gerado automaticamente)
 - `nome`: nome oficial do curso
-- `nivel`: técnico, graduação, extensão, etc.
+- `tipo_curso`: categoria (ex.: técnico, graduação, extensão)
 - `carga_horaria_total`: horas totais do curso
 - `ativo`: `true/false`
 
@@ -28,59 +28,65 @@ Campos recomendados:
 ### Instrutores (`data/instructors.json`)
 
 Campos recomendados:
-- `id`: identificador único (ex.: `INS-001`)
+- `id`: identificador único (gerado automaticamente)
 - `nome`: nome completo
+- `nome_sobrenome`: primeiro e último nome
 - `email`: contato principal
-- `telefone`: opcional
+- `telefone`: obrigatório
 - `especialidades`: lista de áreas
 - `max_horas_semana`: limite opcional de carga horária semanal
 - `ativo`: `true/false`
 
-### Salas (`data/rooms.json`)
+### Ambientes (`data/rooms.json`)
 
 Campos recomendados:
-- `id`: identificador único (ex.: `SALA-101`)
+- `id`: identificador único (gerado automaticamente)
 - `nome`: nome/descrição
 - `capacidade`: número de pessoas
+- `pavimento`: térreo ou 1º piso
 - `recursos`: lista de recursos (projetor, laboratório, etc.)
 - `ativo`: `true/false`
 
 ### Turnos e horários (`data/shifts.json`)
 
 Campos recomendados:
-- `id`: identificador único (ex.: `TURNO-N1`)
+- `id`: identificador único (gerado automaticamente)
 - `nome`: manhã/tarde/noite
 - `horario_inicio`: `HH:MM`
 - `horario_fim`: `HH:MM`
-- `dias_semana`: lista (`["seg", "ter", "qua"]`)
 - `ativo`: `true/false`
 
 ### Calendário letivo (`data/calendars.json`)
 
 Campos recomendados:
-- `ano`: ano letivo (mínimo 2 anos cadastrados)
-- `periodos`: lista com períodos letivos
-  - `nome`: ex.: `2025.1`
-  - `inicio`: `YYYY-MM-DD`
-  - `fim`: `YYYY-MM-DD`
-  - `dias_letivos`: número opcional
-- `feriados`: lista opcional (`YYYY-MM-DD`)
+- `id`: identificador único (gerado automaticamente)
+- `ano`: ano letivo
+- `dias_letivos_por_mes`: lista com 12 entradas (dias letivos por mês)
+- `feriados_por_mes`: lista com 12 entradas (feriados por mês)
 - `ativo`: `true/false`
 
 ### Agendamentos (`data/schedules.json`)
 
 Campos recomendados:
-- `id`: identificador único (ex.: `AG-001`)
-- `curso_id`: referência ao curso (`CUR-001`)
-- `unidade_id`: referência à unidade curricular (`UC-001`)
-- `instrutor_id`: referência ao instrutor (`INS-001`)
-- `sala_id`: referência à sala (`SALA-101`)
-- `turno_id`: referência ao turno (`TURNO-N1`)
-- `data_inicio`: `YYYY-MM-DD`
-- `data_fim`: `YYYY-MM-DD`
+- `id`: identificador único (gerado automaticamente)
+- `ano`: ano da programação
+- `mes`: mês da programação
+- `curso_id`: referência ao curso
+- `instrutor_id`: referência ao colaborador instrutor
+- `analista_id`: referência ao colaborador analista
+- `sala_id`: referência ao ambiente
+- `pavimento`: pavimento derivado do ambiente
+- `qtd_alunos`: quantidade de alunos
+- `turno_id`: referência ao turno
+- `data_inicio`: `DD/MM/AA`
+- `data_fim`: `DD/MM/AA`
+- `hora_inicio`: `HH:MM`
+- `hora_fim`: `HH:MM`
+- `turma`: formato `000.28.0000`
+- `dias_execucao`: lista (ex.: `["SEG", "QUA", "SEX"]`)
 
 Regras de validação:
-- Não permite conflitos de sala ou instrutor no mesmo período, dia da semana e horário.
+- Não permite conflitos de ambiente ou instrutor no mesmo período, dia da semana e horário.
 - Respeita o limite de `max_horas_semana` do instrutor quando informado.
 
 ## Cadastro em lote de unidades curriculares

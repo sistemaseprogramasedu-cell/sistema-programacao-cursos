@@ -15,6 +15,8 @@ Consulte `docs/fluxo-cadastro.md` para o detalhamento dos campos e do fluxo reco
 As funções CRUD carregam o JSON correspondente em `data/`, manipulam a lista `items` e gravam o arquivo novamente.
 Cada módulo trabalha apenas com o seu arquivo:
 
+- IDs são gerados automaticamente de forma sequencial quando não são informados no payload.
+
 - `src/courses.py` → `data/courses.json`
 - `src/curricular_units.py` → `data/curricular_units.json`
 - `src/instructors.py` → `data/instructors.json`
@@ -35,7 +37,9 @@ Erros de validação são lançados como `ValidationError` (definido em `src/sto
 - `create_course(payload)` → cria um curso (valida campos obrigatórios e ID único).
 - `update_course(course_id, updates)` → atualiza um curso existente.
 
-Campos obrigatórios: `id`, `nome`, `nivel`, `carga_horaria_total`.
+Campos obrigatórios: `id`, `nome`, `tipo_curso`, `carga_horaria_total`.
+Ao criar/editar um curso, as unidades curriculares vinculadas ao curso são sincronizadas
+com validação da soma de carga horária.
 
 ### Unidades curriculares (`src/curricular_units.py`)
 
@@ -47,23 +51,23 @@ Campos obrigatórios: `id`, `nome`, `nivel`, `carga_horaria_total`.
 
 Campos obrigatórios: `id`, `curso_id`, `nome` (`carga_horaria` é opcional no lote).
 
-### Instrutores (`src/instructors.py`)
+### Colaboradores (`src/instructors.py`)
 
 - `list_instructors()` → lista todos os instrutores.
 - `get_instructor(instructor_id)` → retorna um instrutor pelo `id`.
 - `create_instructor(payload)` → cria um instrutor.
 - `update_instructor(instructor_id, updates)` → atualiza um instrutor.
 
-Campos obrigatórios: `id`, `nome`, `email`.
+Campos obrigatórios: `id`, `nome`, `nome_sobrenome`, `email`, `telefone`, `role`.
 
-### Salas (`src/rooms.py`)
+### Ambientes (`src/rooms.py`)
 
 - `list_rooms()` → lista todas as salas.
 - `get_room(room_id)` → retorna uma sala pelo `id`.
 - `create_room(payload)` → cria uma sala.
 - `update_room(room_id, updates)` → atualiza uma sala.
 
-Campos obrigatórios: `id`, `nome`, `capacidade`.
+Campos obrigatórios: `id`, `nome`, `capacidade`, `pavimento`.
 
 ### Calendários (`src/calendars.py`)
 
@@ -72,19 +76,20 @@ Campos obrigatórios: `id`, `nome`, `capacidade`.
 - `create_calendar(payload)` → cria um calendário (valida ano único).
 - `update_calendar(year, updates)` → atualiza um calendário.
 
-Campos obrigatórios: `ano`, `periodos`.
+Campos obrigatórios: `id`, `ano`, `dias_letivos_por_mes`.
 
-### Agendamentos (`src/schedules.py`)
+### Programação/Ofertas (`src/schedules.py`)
 
 - `list_schedules()` → lista todos os agendamentos.
 - `get_schedule(schedule_id)` → retorna um agendamento pelo `id`.
 - `create_schedule(payload)` → cria um agendamento com validação de conflitos e limites.
 - `update_schedule(schedule_id, updates)` → atualiza um agendamento existente com as mesmas validações.
 
-Campos obrigatórios: `id`, `curso_id`, `unidade_id`, `instrutor_id`, `sala_id`, `turno_id`, `data_inicio`, `data_fim`.
+Campos obrigatórios: `id`, `ano`, `mes`, `curso_id`, `instrutor_id`, `analista_id`, `sala_id`, `pavimento`,
+`qtd_alunos`, `turno_id`, `data_inicio`, `data_fim`, `ch_total`, `hora_inicio`, `hora_fim`, `turma`, `dias_execucao`.
 
 Validações adicionais:
-- Conflitos de sala e instrutor no mesmo período, dias da semana e horários.
+- Conflitos de ambiente e instrutor no mesmo período, dias de execução e horários.
 - Limite opcional de carga horária semanal do instrutor (`max_horas_semana`).
 
 ## Executando a interface web
