@@ -44,6 +44,9 @@
         {% endfor %}
       </tbody>
     </table>
+    <div class="frame-footer">
+      <span class="total-chip">Total de dias letivos: <strong id="total-dias-letivos">{{ total_dias_letivos }}</strong></span>
+    </div>
   </div>
   <div class="frame">
     <div class="frame-header">
@@ -70,6 +73,9 @@
         {% endfor %}
       </tbody>
     </table>
+    <div class="frame-footer">
+      <span class="total-chip">Total de feriados: <strong id="total-feriados">{{ total_feriados }}</strong></span>
+    </div>
   </div>
   <div class="actions">
     <button class="button" type="submit">Salvar</button>
@@ -88,20 +94,32 @@
   }
 
   function atualizarTotais() {
+    let totalDiasLetivos = 0;
+    let totalFeriados = 0;
     document.querySelectorAll("tbody tr").forEach((row) => {
       const diasInput = row.querySelector(".dias-input");
       const totalInput = row.querySelector(".dias-total");
       if (diasInput && totalInput) {
         const total = new Set(parseDias(diasInput.value)).size;
         totalInput.value = total ? total : "";
+        totalDiasLetivos += total;
       }
       const feriadosInput = row.querySelector(".feriados-input");
       const feriadosTotal = row.querySelector(".feriados-total");
       if (feriadosInput && feriadosTotal) {
         const total = new Set(parseDias(feriadosInput.value)).size;
         feriadosTotal.value = total ? total : "";
+        totalFeriados += total;
       }
     });
+    const totalDiasEl = document.getElementById("total-dias-letivos");
+    const totalFeriadosEl = document.getElementById("total-feriados");
+    if (totalDiasEl) {
+      totalDiasEl.textContent = totalDiasLetivos;
+    }
+    if (totalFeriadosEl) {
+      totalFeriadosEl.textContent = totalFeriados;
+    }
   }
 
   document.querySelectorAll(".dias-input, .feriados-input").forEach((input) => {

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import calendar as calendar_module
 import json
-from datetime import date
+import math
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -145,6 +146,100 @@ def _sum_uc_hours(ucs: List[Dict[str, Any]]) -> str:
     return total_str
 
 
+def _sanitize_days_list(items: List[Any]) -> List[int]:
+    sanitized: List[int] = []
+    for item in items:
+        if isinstance(item, int):
+            value = item
+        elif isinstance(item, str) and item.strip().isdigit():
+            value = int(item.strip())
+        else:
+            continue
+        if 1 <= value <= 31:
+            sanitized.append(value)
+    return sanitized
+
+
+def _sum_calendar_totals(dias_letivos: List[List[Any]], feriados: List[List[Any]]) -> Dict[str, int]:
+    total_dias = 0
+    total_feriados = 0
+    for month_days in dias_letivos:
+        total_dias += len(set(_sanitize_days_list(month_days)))
+    for month_days in feriados:
+        total_feriados += len(set(_sanitize_days_list(month_days)))
+    return {"dias_letivos": total_dias, "feriados": total_feriados}
+
+
+def _parse_hours_value(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if ":" in cleaned:
+            parts = cleaned.split(":")
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                hours = int(parts[0])
+                minutes = int(parts[1])
+                return hours + minutes / 60
+        parsed = _parse_float(cleaned)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _calculate_end_date(
+    year: int,
+    start_date_raw: str,
+    days_execucao: List[str],
+    ch_total: float,
+    hs_dia: float,
+    calendario: Dict[str, Any],
+) -> tuple[Optional[date], Optional[str]]:
+    if not calendario:
+        return None, "Calendário não encontrado para o ano informado."
+    if not start_date_raw:
+        return None, "Informe a data inicial."
+    if not days_execucao:
+        return None, "Selecione ao menos um dia de execução."
+    if ch_total <= 0 or hs_dia <= 0:
+        return None, "Carga horária e horas/dia devem ser maiores que zero."
+
+    try:
+        start_date = datetime.strptime(start_date_raw, "%d/%m/%Y").date()
+    except ValueError:
+        return None, "Data inicial inválida."
+
+    if start_date.year != year:
+        return None, "Ano e data inicial precisam estar no mesmo ano."
+
+    weekday_map = {"SEG": 0, "TER": 1, "QUA": 2, "QUI": 3, "SEX": 4, "SÁB": 5, "SAB": 5}
+    selected_weekdays = {weekday_map[day] for day in days_execucao if day in weekday_map}
+    if not selected_weekdays:
+        return None, "Dias de execução inválidos."
+
+    dias_letivos = calendario.get("dias_letivos_por_mes", [[] for _ in range(12)])
+    month_sets = [set(_sanitize_days_list(days)) for days in dias_letivos]
+
+    total_days_needed = int(math.ceil(ch_total / hs_dia))
+    if total_days_needed <= 0:
+        return None, "Não foi possível calcular o total de dias."
+
+    current = start_date
+    counted = 0
+    while current.year == year:
+        if current.weekday() in selected_weekdays:
+            month_idx = current.month - 1
+            if current.day in month_sets[month_idx]:
+                counted += 1
+                if counted >= total_days_needed:
+                    return current, None
+        current += timedelta(days=1)
+
+    return None, "Não há dias letivos suficientes no calendário para o período informado."
+
+
 def _build_month_grid(year: int, month: int) -> List[List[Optional[int]]]:
     days_in_month = calendar_module.monthrange(year, month)[1]
     weeks: List[List[Optional[int]]] = []
@@ -169,6 +264,42 @@ def _build_month_grid(year: int, month: int) -> List[List[Optional[int]]]:
             week.append(None)
         weeks.append(week)
     return weeks
+
+
+def _compute_schedule_end_date(
+    ano: Any,
+    data_inicio: str,
+    dias_execucao: List[str],
+    curso_id: str,
+    turno_id: str,
+) -> tuple[Optional[str], Optional[str]]:
+    year_value = _parse_int(str(ano)) if ano is not None else None
+    if not year_value:
+        return None, "Informe o ano."
+    course = get_course(curso_id) if curso_id else None
+    if not course:
+        return None, "Curso não encontrado."
+    shift = get_shift(turno_id) if turno_id else None
+    if not shift:
+        return None, "Turno não encontrado."
+
+    ch_total = _parse_hours_value(course.get("carga_horaria_total"))
+    hs_dia = _parse_hours_value(shift.get("hs_dia"))
+    if ch_total is None or hs_dia is None:
+        return None, "Carga horária ou horas/dia inválidas."
+
+    calendario = get_calendar(year_value)
+    end_date, error = _calculate_end_date(
+        year_value,
+        data_inicio,
+        dias_execucao,
+        ch_total,
+        hs_dia,
+        calendario or {},
+    )
+    if error or not end_date:
+        return None, error or "Não foi possível calcular a data final."
+    return end_date.strftime("%d/%m/%Y"), None
 
 
 @app.get("/")
@@ -627,12 +758,15 @@ def calendars_list(request: Request):
 
 @app.get("/calendars/new")
 def calendars_new(request: Request):
+    totals = _sum_calendar_totals([[] for _ in range(12)], [[] for _ in range(12)])
     return _render(
         request,
         "calendar_form.html",
         calendar=None,
         calendar_id=_next_id(list_calendars()),
         months=MONTHS,
+        total_dias_letivos=totals["dias_letivos"],
+        total_feriados=totals["feriados"],
     )
 
 
@@ -648,6 +782,7 @@ async def calendars_create(
     feriados = [_parse_days_list(form_data.get(f"feriados_{idx}", "")) for idx in range(1, 13)]
     if not any(dias_letivos):
         _flash(request, "Preencha ao menos um dia letivo no calendário.", "error")
+        totals = _sum_calendar_totals(dias_letivos, feriados)
         return _render(
             request,
             "calendar_form.html",
@@ -660,6 +795,8 @@ async def calendars_create(
             },
             calendar_id=calendar_id,
             months=MONTHS,
+            total_dias_letivos=totals["dias_letivos"],
+            total_feriados=totals["feriados"],
         )
     payload = {
         "id": calendar_id,
@@ -674,24 +811,33 @@ async def calendars_create(
         return RedirectResponse("/calendars", status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
+        totals = _sum_calendar_totals(dias_letivos, feriados)
         return _render(
             request,
             "calendar_form.html",
             calendar=payload,
             calendar_id=payload.get("id"),
             months=MONTHS,
+            total_dias_letivos=totals["dias_letivos"],
+            total_feriados=totals["feriados"],
         )
 
 
 @app.get("/calendars/{year}/edit")
 def calendars_edit(request: Request, year: int):
     calendar = get_calendar(year)
+    totals = _sum_calendar_totals(
+        calendar.get("dias_letivos_por_mes", [[] for _ in range(12)]) if calendar else [[] for _ in range(12)],
+        calendar.get("feriados_por_mes", [[] for _ in range(12)]) if calendar else [[] for _ in range(12)],
+    )
     return _render(
         request,
         "calendar_form.html",
         calendar=calendar,
         calendar_id=calendar.get("id") if calendar else "",
         months=MONTHS,
+        total_dias_letivos=totals["dias_letivos"],
+        total_feriados=totals["feriados"],
     )
 
 
@@ -707,6 +853,7 @@ async def calendars_update(
     feriados = [_parse_days_list(form_data.get(f"feriados_{idx}", "")) for idx in range(1, 13)]
     if not any(dias_letivos):
         _flash(request, "Preencha ao menos um dia letivo no calendário.", "error")
+        totals = _sum_calendar_totals(dias_letivos, feriados)
         return _render(
             request,
             "calendar_form.html",
@@ -719,6 +866,8 @@ async def calendars_update(
             },
             calendar_id=calendar_id,
             months=MONTHS,
+            total_dias_letivos=totals["dias_letivos"],
+            total_feriados=totals["feriados"],
         )
     updates = {
         "id": calendar_id,
@@ -733,12 +882,15 @@ async def calendars_update(
     except ValidationError as exc:
         updates["ano"] = year
         _flash(request, str(exc), "error")
+        totals = _sum_calendar_totals(dias_letivos, feriados)
         return _render(
             request,
             "calendar_form.html",
             calendar=updates,
             calendar_id=calendar_id,
             months=MONTHS,
+            total_dias_letivos=totals["dias_letivos"],
+            total_feriados=totals["feriados"],
         )
 
 
@@ -963,6 +1115,27 @@ def programming_list(
         },
     )
 
+
+@app.get("/programming/compute-end-date")
+def programming_compute_end_date(
+    year: int,
+    start: str,
+    days: str = "",
+    course_id: str = "",
+    shift_id: str = "",
+):
+    days_execucao = _parse_days(days) if days else []
+    end_date, error = _compute_schedule_end_date(
+        year,
+        start,
+        days_execucao,
+        course_id,
+        shift_id,
+    )
+    if error:
+        return JSONResponse({"error": error}, status_code=400)
+    return JSONResponse({"end_date": end_date})
+
 @app.get("/schedules")
 def schedules_redirect(request: Request):
     query = request.url.query
@@ -1043,6 +1216,17 @@ def schedules_create(
         "observacoes": observacoes,
     }
     try:
+        computed_end_date, _ = _compute_schedule_end_date(
+            payload.get("ano"),
+            payload.get("data_inicio", ""),
+            payload.get("dias_execucao", []),
+            payload.get("curso_id", ""),
+            payload.get("turno_id", ""),
+        )
+        if computed_end_date and payload.get("data_fim") != computed_end_date:
+            raise ValidationError(
+                "Data final não confere com o calendário. Recalcule a data final antes de salvar."
+            )
         create_schedule(payload)
         _flash(request, "Oferta criada com sucesso.")
         return RedirectResponse("/programming", status_code=303)
@@ -1135,6 +1319,17 @@ def schedules_update(
         "observacoes": observacoes,
     }
     try:
+        computed_end_date, _ = _compute_schedule_end_date(
+            updates.get("ano"),
+            updates.get("data_inicio", ""),
+            updates.get("dias_execucao", []),
+            updates.get("curso_id", ""),
+            updates.get("turno_id", ""),
+        )
+        if computed_end_date and updates.get("data_fim") != computed_end_date:
+            raise ValidationError(
+                "Data final não confere com o calendário. Recalcule a data final antes de salvar."
+            )
         update_schedule(schedule_id, updates)
         _flash(request, "Oferta atualizada com sucesso.")
         return RedirectResponse("/programming", status_code=303)
