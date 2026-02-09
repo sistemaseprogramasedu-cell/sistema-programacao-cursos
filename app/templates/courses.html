@@ -9,7 +9,7 @@
     <tr>
       <th>ID</th>
       <th>Nome</th>
-      <th>Nível</th>
+      <th>Tipo de Curso</th>
       <th>Carga Horária</th>
       <th>Status</th>
       <th>Ações</th>
@@ -20,7 +20,7 @@
     <tr>
       <td>{{ course.id }}</td>
       <td>{{ course.nome }}</td>
-      <td>{{ course.nivel }}</td>
+      <td>{{ course.tipo_curso or course.nivel }}</td>
       <td>{{ course.carga_horaria_total }}</td>
       <td><span class="tag">{{ "Ativo" if course.ativo else "Inativo" }}</span></td>
       <td>

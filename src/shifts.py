@@ -7,12 +7,13 @@ from .storage import (
     ensure_unique_id,
     find_item,
     load_items,
+    next_numeric_id,
     require_fields,
     save_items,
 )
 
 FILENAME = "shifts.json"
-REQUIRED_FIELDS = ["id", "nome", "horario_inicio", "horario_fim", "dias_semana"]
+REQUIRED_FIELDS = ["id", "nome", "horario_inicio", "horario_fim"]
 
 
 def list_shifts() -> List[Dict[str, Any]]:
@@ -24,8 +25,10 @@ def get_shift(shift_id: str) -> Dict[str, Any] | None:
 
 
 def create_shift(payload: Dict[str, Any]) -> Dict[str, Any]:
-    require_fields(payload, REQUIRED_FIELDS)
     items = load_items(FILENAME)
+    if not payload.get("id"):
+        payload["id"] = next_numeric_id(items)
+    require_fields(payload, REQUIRED_FIELDS)
     ensure_unique_id(items, payload["id"])
     items.append(payload)
     save_items(FILENAME, items)

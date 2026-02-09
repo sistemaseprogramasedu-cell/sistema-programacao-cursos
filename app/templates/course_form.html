@@ -1,40 +1,237 @@
 {% extends "base.html" %}
 {% set title = "Curso" %}
 {% block content %}
-<form class="form" method="post">
-  <div class="form-row">
-    <div>
-      <label>ID</label>
-      <input name="course_id" value="{{ course.id if course else '' }}" {% if course %}readonly{% endif %} required />
+<form class="form" method="post" id="course-form">
+  <div class="frame">
+    <div class="frame-header">
+      <h3>Dados do Curso</h3>
     </div>
-    <div>
-      <label>Nome</label>
-      <input name="nome" value="{{ course.nome if course else '' }}" required />
+    <div class="form-row">
+      <div>
+        <label>ID</label>
+        <input name="course_id" value="{{ course.id if course else course_id }}" readonly required />
+      </div>
+      <div>
+        <label>Nome do Curso</label>
+        <input name="nome" value="{{ course.nome if course else '' }}" required />
+      </div>
+      <div>
+        <label>Carga Horária Total</label>
+        <input name="carga_horaria_total" id="carga-horaria-total" value="{{ course.carga_horaria_total if course else '' }}" required />
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Tipo de Curso</label>
+        {% set tipo = (course.tipo_curso or course.nivel) if course else '' %}
+        <select name="tipo_curso" required>
+          {% for option in [
+            "Ação Extensiva",
+            "Aperfeiçoamento",
+            "Qualificação",
+            "Técnico",
+            "Técnico Integrado ao Ensino Médio",
+            "EAD",
+            "Graduação",
+            "Pós-Graduação"
+          ] %}
+            <option value="{{ option }}" {% if tipo == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Status</label>
+        <select name="ativo">
+          <option value="true" {% if course and course.ativo %}selected{% endif %}>Ativo</option>
+          <option value="false" {% if course and not course.ativo %}selected{% endif %}>Inativo</option>
+        </select>
+      </div>
     </div>
   </div>
-  <div class="form-row">
-    <div>
-      <label>Nível</label>
-      <input name="nivel" value="{{ course.nivel if course else '' }}" required />
+
+  <div class="frame">
+    <div class="frame-header">
+      <h3>Unidades Curriculares</h3>
+      <div class="frame-actions">
+        <button class="button secondary" type="button" id="open-uc-modal">Cadastrar UCs em Lote</button>
+      </div>
     </div>
-    <div>
-      <label>Carga horária total</label>
-      <input name="carga_horaria_total" value="{{ course.carga_horaria_total if course else '' }}" required />
+    <div class="form-row">
+      <div>
+        <label>Quantidade de UCs</label>
+        <input type="number" min="0" name="quantidade_ucs" id="quantidade-ucs" value="" />
+      </div>
     </div>
-    <div>
-      <label>Status</label>
-      <select name="ativo">
-        <option value="true" {% if course and course.ativo %}selected{% endif %}>Ativo</option>
-        <option value="false" {% if course and not course.ativo %}selected{% endif %}>Inativo</option>
-      </select>
+    <div id="ucs-alert" class="alert" role="alert"></div>
+    <div class="table-wrapper">
+      <table class="table" id="ucs-table">
+        <thead>
+          <tr>
+            <th>UC</th>
+            <th>Nome da UC</th>
+            <th>CH da UC</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
+    <input type="hidden" name="ucs_payload" id="ucs-payload" value='{{ ucs | tojson }}' />
   </div>
+
   <div class="actions">
     <button class="button" type="submit">Salvar</button>
-    {% if course %}
-      <a class="button secondary" href="/curricular-units/batch?course_id={{ course.id }}">Cadastrar UCs (lote)</a>
-    {% endif %}
     <a class="button ghost" href="/courses">Cancelar</a>
   </div>
 </form>
+
+<div class="modal" id="ucs-modal" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>Cadastrar UCs em Lote</h3>
+      <button class="button ghost" type="button" id="close-uc-modal">Fechar</button>
+    </div>
+    <p class="modal-text">
+      Insira abaixo as UCs, uma em cada linha, seguindo o formato: UC+número, Nome da UC, Carga Horária da UC. Ex: UC1, Lógica de Programação, 30
+    </p>
+    <textarea id="ucs-batch-input" placeholder="UC1, Lógica de Programação, 30"></textarea>
+    <div class="actions">
+      <button class="button" type="button" id="apply-uc-batch">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ucsPayloadInput = document.getElementById("ucs-payload");
+  const totalInput = document.getElementById("carga-horaria-total");
+  const quantityInput = document.getElementById("quantidade-ucs");
+  const tableBody = document.querySelector("#ucs-table tbody");
+  const alertBox = document.getElementById("ucs-alert");
+  const modal = document.getElementById("ucs-modal");
+  const batchInput = document.getElementById("ucs-batch-input");
+
+  const initialUcs = (() => {
+    try {
+      return JSON.parse(ucsPayloadInput.value || "[]");
+    } catch (error) {
+      return [];
+    }
+  })();
+
+  function toFloat(value) {
+    if (!value) return null;
+    const normalized = value.replace(",", ".").trim();
+    const parsed = Number.parseFloat(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  function collectUnits() {
+    return Array.from(tableBody.querySelectorAll("tr")).map((row) => {
+      const name = row.querySelector(".uc-name").value.trim();
+      const hoursValue = row.querySelector(".uc-hours").value.trim();
+      return {
+        nome: name,
+        carga_horaria: hoursValue ? toFloat(hoursValue) : "",
+      };
+    });
+  }
+
+  function renderTable(units) {
+    tableBody.innerHTML = "";
+    units.forEach((unit, index) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>UC${index + 1}</td>
+        <td><input class="uc-name" required value="${unit.nome || ""}" /></td>
+        <td><input class="uc-hours" type="number" min="0" required value="${unit.carga_horaria ?? ""}" /></td>
+      `;
+      tableBody.appendChild(row);
+    });
+    attachInputListeners();
+    updatePayload();
+  }
+
+  function updatePayload() {
+    const units = collectUnits();
+    ucsPayloadInput.value = JSON.stringify(units);
+    validateHours();
+  }
+
+  function validateHours() {
+    const total = toFloat(totalInput.value);
+    const units = collectUnits();
+    const sum = units.reduce((acc, unit) => acc + (unit.carga_horaria ? Number(unit.carga_horaria) : 0), 0);
+    if (!total && total !== 0) {
+      alertBox.textContent = "";
+      alertBox.classList.remove("alert-error");
+      return false;
+    }
+    if (sum > total) {
+      const delta = (sum - total).toFixed(2).replace(".00", "");
+      alertBox.textContent = `A soma das CH das UCs está MAIOR que a Carga Horária Total do curso. Diferença: ${delta}.`;
+      alertBox.classList.add("alert-error");
+      return false;
+    }
+    if (sum < total) {
+      const delta = (total - sum).toFixed(2).replace(".00", "");
+      alertBox.textContent = `A soma das CH das UCs está MENOR que a Carga Horária Total do curso. Diferença: ${delta}.`;
+      alertBox.classList.add("alert-error");
+      return false;
+    }
+    alertBox.textContent = "Soma das CH das UCs está correta.";
+    alertBox.classList.remove("alert-error");
+    return true;
+  }
+
+  function attachInputListeners() {
+    tableBody.querySelectorAll("input").forEach((input) => {
+      input.addEventListener("input", updatePayload);
+    });
+  }
+
+  quantityInput.addEventListener("input", () => {
+    const quantity = Number.parseInt(quantityInput.value || "0", 10);
+    const current = collectUnits();
+    const updated = Array.from({ length: quantity }, (_, index) => current[index] || { nome: "", carga_horaria: "" });
+    renderTable(updated);
+  });
+
+  totalInput.addEventListener("input", validateHours);
+
+  document.getElementById("open-uc-modal").addEventListener("click", () => {
+    modal.classList.add("open");
+  });
+  document.getElementById("close-uc-modal").addEventListener("click", () => {
+    modal.classList.remove("open");
+  });
+  document.getElementById("apply-uc-batch").addEventListener("click", () => {
+    const lines = batchInput.value.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (!lines.length) return;
+    const parsed = lines.map((line) => {
+      const parts = line.split(",").map((part) => part.trim()).filter(Boolean);
+      return {
+        nome: parts[1] || "",
+        carga_horaria: parts[2] ? toFloat(parts[2]) : "",
+      };
+    });
+    quantityInput.value = parsed.length;
+    renderTable(parsed);
+    modal.classList.remove("open");
+  });
+
+  document.getElementById("course-form").addEventListener("submit", (event) => {
+    const isValid = validateHours();
+    if (!isValid) {
+      event.preventDefault();
+      alert(alertBox.textContent || "Revise as UCs antes de salvar.");
+    }
+  });
+
+  if (initialUcs.length) {
+    quantityInput.value = initialUcs.length;
+    renderTable(initialUcs);
+  } else {
+    quantityInput.value = "0";
+    renderTable([]);
+  }
+</script>
 {% endblock %}

@@ -63,3 +63,15 @@ def next_sequential_id(items: List[Dict[str, Any]], prefix: str, id_field: str =
         if suffix.isdigit():
             highest = max(highest, int(suffix))
     return f"{prefix}{highest + 1:03d}"
+
+
+def next_numeric_id(items: List[Dict[str, Any]], id_field: str = "id") -> str:
+    highest = 0
+    for item in items:
+        value = item.get(id_field)
+        if isinstance(value, int):
+            highest = max(highest, value)
+            continue
+        if isinstance(value, str) and value.strip().isdigit():
+            highest = max(highest, int(value.strip()))
+    return str(highest + 1)

@@ -8,7 +8,8 @@
   <thead>
     <tr>
       <th>ID</th>
-      <th>Nome</th>
+      <th>Nome Completo</th>
+      <th>Nome e Sobrenome</th>
       <th>Email</th>
       <th>Categoria</th>
       <th>Especialidades</th>
@@ -22,6 +23,7 @@
     <tr>
       <td>{{ instructor.id }}</td>
       <td>{{ instructor.nome }}</td>
+      <td>{{ instructor.nome_sobrenome }}</td>
       <td>{{ instructor.email }}</td>
       <td>{{ instructor.role }}</td>
       <td>{{ instructor.especialidades | join(', ') }}</td>
@@ -39,4 +41,27 @@
     {% endfor %}
   </tbody>
 </table>
+
+<div class="frame">
+  <div class="frame-header">
+    <h3>RELATÓRIO</h3>
+  </div>
+  <form class="filters" method="get">
+    <div>
+      <label>Por categoria</label>
+      <select name="category">
+        {% set selected = category_filter or "Todos" %}
+        <option value="Todos" {% if selected == "Todos" %}selected{% endif %}>Todos</option>
+        <option value="Instrutor" {% if selected == "Instrutor" %}selected{% endif %}>Instrutor</option>
+        <option value="Analista" {% if selected == "Analista" %}selected{% endif %}>Analista</option>
+        <option value="Assistente" {% if selected == "Assistente" %}selected{% endif %}>Assistente</option>
+      </select>
+    </div>
+    <div class="actions">
+      <button class="button" type="submit">Aplicar filtro</button>
+      <button class="button secondary" type="button" onclick="window.print()">Imprimir</button>
+      <button class="button ghost" type="button" disabled>Exportar PDF (Em breve)</button>
+    </div>
+  </form>
+</div>
 {% endblock %}

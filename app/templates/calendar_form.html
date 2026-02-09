@@ -4,6 +4,10 @@
 <form class="form" method="post">
   <div class="form-row">
     <div>
+      <label>ID</label>
+      <input name="calendar_id" value="{{ calendar.id if calendar else calendar_id }}" readonly required />
+    </div>
+    <div>
       <label>Ano</label>
       <input name="ano" value="{{ calendar.ano if calendar else '' }}" {% if calendar %}readonly{% endif %} required />
     </div>
@@ -15,17 +19,94 @@
       </select>
     </div>
   </div>
-  <div>
-    <label>Períodos (JSON)</label>
-    <textarea name="periodos_json">{{ calendar.periodos | tojson(indent=2) if calendar else '[]' }}</textarea>
+  <div class="frame">
+    <div class="frame-header">
+      <h3>Dias Letivos</h3>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Mês</th>
+          <th>Dias letivos</th>
+          <th>Total de dias letivos do mês</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for month in months %}
+        {% set dias = (calendar.dias_letivos_por_mes[loop.index0] if calendar and calendar.dias_letivos_por_mes else []) %}
+        <tr>
+          <td>{{ month.label }}</td>
+          <td>
+            <input name="dias_letivos_{{ month.value }}" class="dias-input" value="{{ dias | join(', ') }}" placeholder="1,2,3,10" />
+          </td>
+          <td><input class="dias-total" readonly /></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  <div>
-    <label>Feriados (JSON)</label>
-    <textarea name="feriados_json">{{ calendar.feriados | tojson(indent=2) if calendar else '[]' }}</textarea>
+  <div class="frame">
+    <div class="frame-header">
+      <h3>Feriados</h3>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Mês</th>
+          <th>Feriados</th>
+          <th>Total de feriados do mês</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for month in months %}
+        {% set dias = (calendar.feriados_por_mes[loop.index0] if calendar and calendar.feriados_por_mes else []) %}
+        <tr>
+          <td>{{ month.label }}</td>
+          <td>
+            <input name="feriados_{{ month.value }}" class="feriados-input" value="{{ dias | join(', ') }}" placeholder="1,2,3,10" />
+          </td>
+          <td><input class="feriados-total" readonly /></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
   <div class="actions">
     <button class="button" type="submit">Salvar</button>
     <a class="button ghost" href="/calendars">Cancelar</a>
   </div>
 </form>
+
+<script>
+  function parseDias(value) {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => Number.parseInt(item, 10))
+      .filter((item) => Number.isInteger(item) && item >= 1 && item <= 31);
+  }
+
+  function atualizarTotais() {
+    document.querySelectorAll("tbody tr").forEach((row) => {
+      const diasInput = row.querySelector(".dias-input");
+      const totalInput = row.querySelector(".dias-total");
+      if (diasInput && totalInput) {
+        const total = new Set(parseDias(diasInput.value)).size;
+        totalInput.value = total ? total : "";
+      }
+      const feriadosInput = row.querySelector(".feriados-input");
+      const feriadosTotal = row.querySelector(".feriados-total");
+      if (feriadosInput && feriadosTotal) {
+        const total = new Set(parseDias(feriadosInput.value)).size;
+        feriadosTotal.value = total ? total : "";
+      }
+    });
+  }
+
+  document.querySelectorAll(".dias-input, .feriados-input").forEach((input) => {
+    input.addEventListener("input", atualizarTotais);
+  });
+  atualizarTotais();
+</script>
 {% endblock %}

@@ -5,11 +5,17 @@
   <div class="form-row">
     <div>
       <label>ID</label>
-      <input name="shift_id" value="{{ shift.id if shift else '' }}" {% if shift %}readonly{% endif %} required />
+      <input name="shift_id" value="{{ shift.id if shift else shift_id }}" readonly required />
     </div>
     <div>
-      <label>Nome</label>
-      <input name="nome" value="{{ shift.nome if shift else '' }}" required />
+      <label>Nomenclatura</label>
+      {% set nome = shift.nome if shift else '' %}
+      <select name="nome" required>
+        <option value="Manhã" {% if nome == "Manhã" %}selected{% endif %}>Manhã</option>
+        <option value="Tarde" {% if nome == "Tarde" %}selected{% endif %}>Tarde</option>
+        <option value="Noite" {% if nome == "Noite" %}selected{% endif %}>Noite</option>
+        <option value="Especial" {% if nome == "Especial" %}selected{% endif %}>Especial</option>
+      </select>
     </div>
   </div>
   <div class="form-row">
@@ -20,10 +26,6 @@
     <div>
       <label>Horário fim</label>
       <input name="horario_fim" value="{{ shift.horario_fim if shift else '' }}" required />
-    </div>
-    <div>
-      <label>Dias da semana (seg, ter, qua...)</label>
-      <input name="dias_semana" value="{{ shift.dias_semana | join(', ') if shift else '' }}" required />
     </div>
     <div>
       <label>Status</label>

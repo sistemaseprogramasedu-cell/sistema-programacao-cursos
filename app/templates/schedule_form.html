@@ -1,63 +1,138 @@
 {% extends "base.html" %}
-{% set title = "Oferta" %}
+{% set title = "Cadastro de Oferta" %}
 {% block content %}
-<form class="form" method="post">
-  <div class="form-row">
-    <div>
-      <label>ID</label>
-      <input name="schedule_id" value="{{ schedule.id if schedule else '' }}" {% if schedule %}readonly{% endif %} required />
+<form class="form" method="post" id="schedule-form">
+  <div class="frame">
+    <div class="frame-header">
+      <h3>Cadastro de Oferta</h3>
     </div>
-    <div>
-      <label>Curso</label>
-      <select name="curso_id" required>
-        {% for course in courses %}
-          <option value="{{ course.id }}" {% if schedule and schedule.curso_id == course.id %}selected{% endif %}>{{ course.nome }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label>Unidade Curricular</label>
-      <select name="unidade_id" required>
-        {% for unit in units %}
-          <option value="{{ unit.id }}" {% if schedule and schedule.unidade_id == unit.id %}selected{% endif %}>{{ unit.nome }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
-  <div class="form-row">
-    <div>
-      <label>Colaborador</label>
-      <select name="instrutor_id" required>
-        {% for instructor in instructors %}
-          <option value="{{ instructor.id }}" {% if schedule and schedule.instrutor_id == instructor.id %}selected{% endif %}>{{ instructor.nome }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label>Sala</label>
-      <select name="sala_id" required>
-        {% for room in rooms %}
-          <option value="{{ room.id }}" {% if schedule and schedule.sala_id == room.id %}selected{% endif %}>{{ room.nome }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label>Turno</label>
-      <select name="turno_id" required>
-        {% for shift in shifts %}
-          <option value="{{ shift.id }}" {% if schedule and schedule.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
-        {% endfor %}
-      </select>
+    <div class="form-row">
+      <div>
+        <label>ID</label>
+        <input name="schedule_id" value="{{ schedule.id if schedule else schedule_id }}" readonly required />
+      </div>
+      <div>
+        <label>Ano</label>
+        <input name="ano" value="{{ schedule.ano if schedule else '' }}" required />
+      </div>
+      <div>
+        <label>Mês</label>
+        <select name="mes" required>
+          {% for month in months %}
+            <option value="{{ month.value }}" {% if schedule and schedule.mes|string == month.value %}selected{% endif %}>{{ month.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
   </div>
-  <div class="form-row">
-    <div>
-      <label>Data início</label>
-      <input name="data_inicio" value="{{ schedule.data_inicio if schedule else '' }}" required />
+
+  <div class="frame">
+    <div class="frame-header">
+      <h3>Dados da Oferta</h3>
     </div>
-    <div>
-      <label>Data fim</label>
-      <input name="data_fim" value="{{ schedule.data_fim if schedule else '' }}" required />
+    <div class="form-row">
+      <div>
+        <label>Turno</label>
+        <select name="turno_id" required>
+          {% for shift in shifts %}
+            <option value="{{ shift.id }}" {% if schedule and schedule.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Pavimento</label>
+        <input name="pavimento" id="pavimento" value="{{ schedule.pavimento if schedule else '' }}" readonly required />
+      </div>
+      <div>
+        <label>Ambiente</label>
+        <select name="sala_id" id="ambiente-select" required>
+          {% for room in rooms %}
+            <option value="{{ room.id }}" data-floor="{{ room.pavimento }}" data-capacity="{{ room.capacidade }}" {% if schedule and schedule.sala_id == room.id %}selected{% endif %}>{{ room.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>QTD. Alunos</label>
+        <input name="qtd_alunos" id="qtd-alunos" value="{{ schedule.qtd_alunos if schedule else '' }}" required />
+      </div>
+      <div>
+        <label>Curso</label>
+        <select name="curso_id" id="curso-select" required>
+          {% for course in courses %}
+            <option value="{{ course.id }}" data-ch="{{ course.carga_horaria_total }}" {% if schedule and schedule.curso_id == course.id %}selected{% endif %}>{{ course.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Recurso/Tipo</label>
+        <input name="recurso_tipo" value="{{ schedule.recurso_tipo if schedule else '' }}" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Data Inicial (DD/MM/AA)</label>
+        <input name="data_inicio" value="{{ schedule.data_inicio if schedule else '' }}" required />
+      </div>
+      <div>
+        <label>Data Final (DD/MM/AA)</label>
+        <input name="data_fim" value="{{ schedule.data_fim if schedule else '' }}" required />
+      </div>
+      <div>
+        <label>CH</label>
+        <input name="ch_total" id="ch-total" value="{{ schedule.ch_total if schedule else '' }}" readonly required />
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Nº da Turma</label>
+        <input name="turma" value="{{ schedule.turma if schedule else '' }}" placeholder="123.28.2026" pattern="\\d{3}\\.28\\.\\d{4}" required />
+      </div>
+      <div>
+        <label>Hora Inicial</label>
+        <input name="hora_inicio" value="{{ schedule.hora_inicio if schedule else '' }}" type="time" required />
+      </div>
+      <div>
+        <label>Hora Final</label>
+        <input name="hora_fim" value="{{ schedule.hora_fim if schedule else '' }}" type="time" required />
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Analista</label>
+        <select name="analista_id" required>
+          {% for collaborator in analysts %}
+            <option value="{{ collaborator.id }}" {% if schedule and schedule.analista_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome_sobrenome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Instrutor</label>
+        <select name="instrutor_id" required>
+          {% for collaborator in instructors %}
+            <option value="{{ collaborator.id }}" {% if schedule and schedule.instrutor_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome_sobrenome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Dias de execução</label>
+        <div class="checkbox-grid">
+          {% set dias = schedule.dias_execucao if schedule and schedule.dias_execucao else [] %}
+          {% for day in ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB"] %}
+            <label class="checkbox-item">
+              <input type="checkbox" name="dias_execucao" value="{{ day }}" {% if day in dias %}checked{% endif %} />
+              <span>{{ day }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div>
+        <label>Observações</label>
+        <textarea name="observacoes">{{ schedule.observacoes if schedule else '' }}</textarea>
+      </div>
     </div>
   </div>
   <div class="actions">
@@ -65,4 +140,40 @@
     <a class="button ghost" href="/programming">Cancelar</a>
   </div>
 </form>
+
+<script>
+  const ambienteSelect = document.getElementById("ambiente-select");
+  const pavimentoInput = document.getElementById("pavimento");
+  const qtdAlunosInput = document.getElementById("qtd-alunos");
+  const cursoSelect = document.getElementById("curso-select");
+  const chTotalInput = document.getElementById("ch-total");
+
+  function atualizarAmbiente() {
+    const option = ambienteSelect.selectedOptions[0];
+    if (!option) return;
+    pavimentoInput.value = option.dataset.floor || "";
+    if (!qtdAlunosInput.value || qtdAlunosInput.dataset.auto === "true") {
+      qtdAlunosInput.value = option.dataset.capacity || "";
+      qtdAlunosInput.dataset.auto = "true";
+    }
+  }
+
+  function atualizarCurso() {
+    const option = cursoSelect.selectedOptions[0];
+    if (!option) return;
+    chTotalInput.value = option.dataset.ch || "";
+  }
+
+  qtdAlunosInput.addEventListener("input", () => {
+    qtdAlunosInput.dataset.auto = "false";
+  });
+  ambienteSelect.addEventListener("change", () => {
+    qtdAlunosInput.dataset.auto = "true";
+    atualizarAmbiente();
+  });
+  cursoSelect.addEventListener("change", atualizarCurso);
+
+  atualizarAmbiente();
+  atualizarCurso();
+</script>
 {% endblock %}
