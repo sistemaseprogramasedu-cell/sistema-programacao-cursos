@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set title = "Colaborador" %}
 {% block content %}
-<form class="form" method="post">
+<form class="form" method="post" id="collaborator-form">
   <div class="form-row">
     <div>
       <label>ID</label>
@@ -17,13 +17,15 @@
     </div>
     <div>
       <label>Email</label>
-      <input name="email" value="{{ instructor.email if instructor else '' }}" required />
+      <input name="email" id="email" value="{{ instructor.email if instructor else '' }}" required />
+      <div class="field-error" id="email-error"></div>
     </div>
   </div>
   <div class="form-row">
     <div>
       <label>Telefone</label>
-      <input name="telefone" value="{{ instructor.telefone if instructor else '' }}" required />
+      <input name="telefone" id="telefone" value="{{ instructor.telefone if instructor else '' }}" required />
+      <div class="field-error" id="telefone-error"></div>
     </div>
     <div>
       <label>Categoria</label>
@@ -59,6 +61,11 @@
 <script>
   const nomeCompleto = document.getElementById("nome-completo");
   const nomeSobrenome = document.getElementById("nome-sobrenome");
+  const emailInput = document.getElementById("email");
+  const telefoneInput = document.getElementById("telefone");
+  const emailError = document.getElementById("email-error");
+  const telefoneError = document.getElementById("telefone-error");
+  const form = document.getElementById("collaborator-form");
 
   function gerarNomeSobrenome() {
     const partes = nomeCompleto.value.trim().split(/\s+/).filter(Boolean);
@@ -77,5 +84,67 @@
   if (!nomeSobrenome.value) {
     gerarNomeSobrenome();
   }
+
+  function setFieldError(input, errorEl, message) {
+    errorEl.textContent = message || "";
+    if (message) {
+      input.classList.add("input-error");
+    } else {
+      input.classList.remove("input-error");
+    }
+  }
+
+  function validarEmail() {
+    const value = emailInput.value.trim();
+    const atCount = (value.match(/@/g) || []).length;
+    if (atCount !== 1) {
+      setFieldError(emailInput, emailError, "Informe um e-mail válido com apenas um '@'.");
+      return false;
+    }
+    setFieldError(emailInput, emailError, "");
+    return true;
+  }
+
+  function formatarTelefone(valor) {
+    const digits = valor.replace(/\D/g, "").slice(0, 11);
+    const ddd = digits.slice(0, 2);
+    const part1 = digits.slice(2, 7);
+    const part2 = digits.slice(7, 11);
+    if (!ddd) return "";
+    if (digits.length <= 2) return `(${ddd}`;
+    if (digits.length <= 7) return `(${ddd}) ${part1}`;
+    return `(${ddd}) ${part1}-${part2}`;
+  }
+
+  function validarTelefone() {
+    const digits = telefoneInput.value.replace(/\D/g, "");
+    if (digits.length !== 11) {
+      setFieldError(telefoneInput, telefoneError, "Telefone deve ter 11 dígitos (DD + número).");
+      return false;
+    }
+    setFieldError(telefoneInput, telefoneError, "");
+    return true;
+  }
+
+  emailInput.addEventListener("input", validarEmail);
+  telefoneInput.addEventListener("input", () => {
+    const formatted = formatarTelefone(telefoneInput.value);
+    telefoneInput.value = formatted;
+    validarTelefone();
+  });
+
+  form.addEventListener("submit", (event) => {
+    const isEmailValid = validarEmail();
+    const isTelefoneValid = validarTelefone();
+    if (!isEmailValid || !isTelefoneValid) {
+      event.preventDefault();
+    }
+  });
+
+  if (telefoneInput.value) {
+    telefoneInput.value = formatarTelefone(telefoneInput.value);
+  }
+  validarEmail();
+  validarTelefone();
 </script>
 {% endblock %}

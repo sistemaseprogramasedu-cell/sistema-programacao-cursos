@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 from .storage import (
@@ -42,6 +43,15 @@ def _build_short_name(full_name: str) -> str:
 def _normalize_instructor(payload: Dict[str, Any]) -> Dict[str, Any]:
     normalized = _with_default_role(payload)
     full_name = str(normalized.get("nome", "")).strip()
+    email = str(normalized.get("email", "")).strip()
+    if email.count("@") != 1:
+        raise ValidationError("E-mail inválido: informe exatamente um '@'.")
+    normalized["email"] = email
+    phone_raw = str(normalized.get("telefone", "")).strip()
+    digits = re.sub(r"\D", "", phone_raw)
+    if len(digits) != 11:
+        raise ValidationError("Telefone inválido: informe 11 dígitos (DD + número).")
+    normalized["telefone"] = f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
     short_name = normalized.get("nome_sobrenome") or normalized.get("nome_curto")
     if not short_name and full_name:
         normalized["nome_sobrenome"] = _build_short_name(full_name)

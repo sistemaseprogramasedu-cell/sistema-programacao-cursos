@@ -76,11 +76,16 @@
       </table>
     </div>
     <input type="hidden" name="ucs_payload" id="ucs-payload" value='{{ ucs | tojson }}' />
-  </div>
-
-  <div class="actions">
-    <button class="button" type="submit">Salvar</button>
-    <a class="button ghost" href="/courses">Cancelar</a>
+    <div class="frame-footer">
+      <div class="actions">
+        <button class="button" type="submit">Salvar</button>
+        <a class="button ghost" href="/courses">Cancelar</a>
+      </div>
+      <div class="total-chip">
+        <strong>Total de CH das UCs:</strong>
+        <span id="total-ucs-ch">{{ total_ucs_ch }}</span>
+      </div>
+    </div>
   </div>
 </form>
 
@@ -108,6 +113,7 @@
   const alertBox = document.getElementById("ucs-alert");
   const modal = document.getElementById("ucs-modal");
   const batchInput = document.getElementById("ucs-batch-input");
+  const totalUcsDisplay = document.getElementById("total-ucs-ch");
 
   const initialUcs = (() => {
     try {
@@ -160,6 +166,7 @@
     const total = toFloat(totalInput.value);
     const units = collectUnits();
     const sum = units.reduce((acc, unit) => acc + (unit.carga_horaria ? Number(unit.carga_horaria) : 0), 0);
+    totalUcsDisplay.textContent = sum.toFixed(2).replace(".00", "");
     if (!total && total !== 0) {
       alertBox.textContent = "";
       alertBox.classList.remove("alert-error");

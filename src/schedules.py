@@ -51,6 +51,7 @@ def create_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
     items = load_items(FILENAME)
     if not payload.get("id"):
         payload["id"] = next_numeric_id(items)
+    _normalize_dates(payload)
     require_fields(payload, REQUIRED_FIELDS)
     ensure_unique_id(items, payload["id"])
     _validate_references(payload)
@@ -66,6 +67,7 @@ def update_schedule(schedule_id: str, updates: Dict[str, Any]) -> Dict[str, Any]
     if not schedule:
         raise ValidationError(f"Programação não encontrada: {schedule_id}")
     schedule.update(updates)
+    _normalize_dates(schedule)
     require_fields(schedule, REQUIRED_FIELDS)
     _validate_references(schedule)
     remaining = [item for item in items if item.get("id") != schedule_id]
@@ -107,13 +109,15 @@ def _ensure_instructor(instructor_id: str, role: str) -> None:
 
 
 def _parse_date(raw: str) -> date:
-    formats = ["%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"]
-    for fmt in formats:
-        try:
-            return datetime.strptime(raw, fmt).date()
-        except ValueError:
-            continue
-    raise ValidationError(f"Data inválida: {raw}")
+    try:
+        return datetime.strptime(raw, "%d/%m/%Y").date()
+    except ValueError as exc:
+        raise ValidationError(f"Data inválida: {raw}") from exc
+
+
+def _normalize_dates(payload: Dict[str, Any]) -> None:
+    payload["data_inicio"] = _parse_date(payload["data_inicio"]).strftime("%d/%m/%Y")
+    payload["data_fim"] = _parse_date(payload["data_fim"]).strftime("%d/%m/%Y")
 
 
 def _parse_time(raw: str) -> time:
@@ -221,5 +225,5 @@ def _validate_dates_and_times(payload: Dict[str, Any]) -> None:
         raise ValidationError("Número da turma é obrigatório.")
     import re
 
-    if not re.fullmatch(r"\d{3}\.28\.\d{4}", turma):
-        raise ValidationError("Número da turma inválido. Formato esperado: 000.28.0000.")
+    if not re.fullmatch(r"\d{4}\.\d{2}\.\d{3}", turma):
+        raise ValidationError("Número da turma inválido. Formato esperado: 0000.00.000.")
