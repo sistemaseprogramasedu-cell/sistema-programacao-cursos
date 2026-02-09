@@ -1,60 +1,71 @@
 {% extends "base.html" %}
-{% set title = "Programação" %}
+{% set title = "Criar Programação" %}
 {% block content %}
-<div class="actions">
-  <a class="button" href="/programming/new">Nova oferta</a>
+<div class="panel-grid">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>Programação</h3>
+      <a class="button" href="/programming/new">Nova Oferta</a>
+    </div>
+    <form class="filters" method="get">
+      <div>
+        <label>Exibir Programação Por Ano</label>
+        <input name="ano" value="{{ filters.ano }}" />
+      </div>
+      <div>
+        <label>Mês</label>
+        <select name="mes">
+          <option value="">Todos</option>
+          {% for month in months %}
+            <option value="{{ month.value }}" {% if filters.mes == month.value %}selected{% endif %}>{{ month.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="actions">
+        <button class="button" type="submit">Aplicar filtros</button>
+        <a class="button ghost" href="/programming">Limpar</a>
+      </div>
+    </form>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <h3>Relatórios</h3>
+    </div>
+    <form class="filters" method="get">
+      <div>
+        <label>Ano</label>
+        <input name="ano" value="{{ filters.ano }}" />
+      </div>
+      <div>
+        <label>Mês</label>
+        <select name="mes">
+          <option value="">Todos</option>
+          {% for month in all_months %}
+            <option value="{{ month.value }}" {% if filters.mes == month.value %}selected{% endif %}>{{ month.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="actions">
+        <button class="button secondary" type="button" onclick="window.print()">Imprimir</button>
+        <button class="button ghost" type="button" disabled>Exportar PDF (Em breve)</button>
+      </div>
+    </form>
+  </div>
 </div>
-<form class="filters" method="get">
-  <div>
-    <label>Data início</label>
-    <input name="data_inicio" value="{{ filters.data_inicio }}" />
-  </div>
-  <div>
-    <label>Data fim</label>
-    <input name="data_fim" value="{{ filters.data_fim }}" />
-  </div>
-  <div>
-    <label>Sala</label>
-    <select name="sala_id">
-      <option value="">Todas</option>
-      {% for room in rooms %}
-        <option value="{{ room.id }}" {% if filters.sala_id == room.id %}selected{% endif %}>{{ room.nome }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div>
-    <label>Colaborador</label>
-    <select name="instrutor_id">
-      <option value="">Todos</option>
-      {% for instructor in instructors %}
-        <option value="{{ instructor.id }}" {% if filters.instrutor_id == instructor.id %}selected{% endif %}>{{ instructor.nome }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div>
-    <label>Turno</label>
-    <select name="turno_id">
-      <option value="">Todos</option>
-      {% for shift in shifts %}
-        <option value="{{ shift.id }}" {% if filters.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="actions">
-    <button class="button" type="submit">Filtrar</button>
-    <a class="button ghost" href="/programming">Limpar</a>
-  </div>
-</form>
 <table class="table">
   <thead>
     <tr>
       <th>ID</th>
+      <th>Ano/Mês</th>
       <th>Curso</th>
-      <th>UC</th>
-      <th>Colaborador</th>
-      <th>Sala</th>
+      <th>Ambiente</th>
       <th>Turno</th>
+      <th>Instrutor</th>
+      <th>Analista</th>
       <th>Período</th>
+      <th>Horário</th>
+      <th>Dias</th>
+      <th>Turma</th>
       <th>Ações</th>
     </tr>
   </thead>
@@ -62,12 +73,16 @@
     {% for schedule in schedules %}
     <tr>
       <td>{{ schedule.id }}</td>
-      <td>{{ schedule.curso_id }}</td>
-      <td>{{ schedule.unidade_id }}</td>
-      <td>{{ schedule.instrutor_id }}</td>
-      <td>{{ schedule.sala_id }}</td>
-      <td>{{ schedule.turno_id }}</td>
-      <td>{{ schedule.data_inicio }} → {{ schedule.data_fim }}</td>
+      <td>{{ schedule.ano or "—" }}/{{ schedule.mes or "—" }}</td>
+      <td>{{ course_map[schedule.curso_id] if schedule.curso_id in course_map else schedule.curso_id or "—" }}</td>
+      <td>{{ room_map[schedule.sala_id] if schedule.sala_id in room_map else schedule.sala_id or "—" }}</td>
+      <td>{{ shift_map[schedule.turno_id] if schedule.turno_id in shift_map else schedule.turno_id or "—" }}</td>
+      <td>{{ instructor_map[schedule.instrutor_id] if schedule.instrutor_id in instructor_map else schedule.instrutor_id or "—" }}</td>
+      <td>{{ instructor_map[schedule.analista_id] if schedule.analista_id in instructor_map else schedule.analista_id or "—" }}</td>
+      <td>{{ schedule.data_inicio or "—" }} → {{ schedule.data_fim or "—" }}</td>
+      <td>{{ schedule.hora_inicio or "—" }} → {{ schedule.hora_fim or "—" }}</td>
+      <td>{{ schedule.dias_execucao | join(', ') if schedule.dias_execucao else "—" }}</td>
+      <td>{{ schedule.turma or "—" }}</td>
       <td>
         <div class="actions">
           <a class="button secondary" href="/programming/{{ schedule.id }}/edit">Editar</a>

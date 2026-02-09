@@ -42,7 +42,22 @@ from src.schedules import (
     update_schedule,
 )
 from src.shifts import create_shift, delete_shift, get_shift, list_shifts, update_shift
-from src.storage import ValidationError
+from src.storage import ValidationError, next_numeric_id
+
+MONTHS = [
+    {"value": "1", "label": "Janeiro"},
+    {"value": "2", "label": "Fevereiro"},
+    {"value": "3", "label": "Março"},
+    {"value": "4", "label": "Abril"},
+    {"value": "5", "label": "Maio"},
+    {"value": "6", "label": "Junho"},
+    {"value": "7", "label": "Julho"},
+    {"value": "8", "label": "Agosto"},
+    {"value": "9", "label": "Setembro"},
+    {"value": "10", "label": "Outubro"},
+    {"value": "11", "label": "Novembro"},
+    {"value": "12", "label": "Dezembro"},
+]
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="sistema-programacao-cursos")
@@ -96,6 +111,25 @@ def _parse_json(text: str, default: Any) -> Any:
     return json.loads(cleaned)
 
 
+def _next_id(items: List[Dict[str, Any]]) -> str:
+    return next_numeric_id(items)
+
+
+def _parse_days_list(raw: str) -> List[int]:
+    if not raw:
+        return []
+    items: List[int] = []
+    for part in raw.split(","):
+        cleaned = part.strip()
+        if not cleaned:
+            continue
+        if cleaned.isdigit():
+            value = int(cleaned)
+            if 1 <= value <= 31:
+                items.append(value)
+    return items
+
+
 @app.get("/")
 def dashboard(request: Request):
     return _render(
@@ -120,37 +154,60 @@ def courses_list(request: Request):
 
 @app.get("/courses/new")
 def courses_new(request: Request):
-    return _render(request, "course_form.html", course=None)
+    return _render(
+        request,
+        "course_form.html",
+        course=None,
+        course_id=_next_id(list_courses()),
+        ucs=[],
+    )
 
 
 @app.post("/courses/new")
 def courses_create(
     request: Request,
-    course_id: str = Form(...),
+    course_id: str = Form(""),
     nome: str = Form(...),
-    nivel: str = Form(...),
+    tipo_curso: str = Form(...),
     carga_horaria_total: str = Form(...),
     ativo: str = Form("true"),
+    ucs_payload: str = Form("[]"),
 ):
+    ucs = _parse_json(ucs_payload, [])
     payload = {
         "id": course_id,
         "nome": nome,
-        "nivel": nivel,
+        "tipo_curso": tipo_curso,
         "carga_horaria_total": _parse_int(carga_horaria_total) or carga_horaria_total,
         "ativo": ativo == "true",
+        "curricular_units": ucs,
     }
     try:
         create_course(payload)
         _flash(request, "Curso cadastrado com sucesso.")
         return RedirectResponse("/courses", status_code=303)
-    except ValidationError as exc:
+    except (ValidationError, json.JSONDecodeError) as exc:
         _flash(request, str(exc), "error")
-        return _render(request, "course_form.html", course=payload)
+        return _render(
+            request,
+            "course_form.html",
+            course=payload,
+            course_id=payload.get("id"),
+            ucs=ucs,
+        )
 
 
 @app.get("/courses/{course_id}/edit")
 def courses_edit(request: Request, course_id: str):
-    return _render(request, "course_form.html", course=get_course(course_id))
+    course = get_course(course_id)
+    ucs = [unit for unit in list_units() if unit.get("curso_id") == course_id]
+    return _render(
+        request,
+        "course_form.html",
+        course=course,
+        course_id=course_id,
+        ucs=ucs,
+    )
 
 
 @app.post("/courses/{course_id}/edit")
@@ -158,24 +215,33 @@ def courses_update(
     request: Request,
     course_id: str,
     nome: str = Form(...),
-    nivel: str = Form(...),
+    tipo_curso: str = Form(...),
     carga_horaria_total: str = Form(...),
     ativo: str = Form("true"),
+    ucs_payload: str = Form("[]"),
 ):
+    ucs = _parse_json(ucs_payload, [])
     updates = {
         "nome": nome,
-        "nivel": nivel,
+        "tipo_curso": tipo_curso,
         "carga_horaria_total": _parse_int(carga_horaria_total) or carga_horaria_total,
         "ativo": ativo == "true",
+        "curricular_units": ucs,
     }
     try:
         update_course(course_id, updates)
         _flash(request, "Curso atualizado com sucesso.")
         return RedirectResponse("/courses", status_code=303)
-    except ValidationError as exc:
+    except (ValidationError, json.JSONDecodeError) as exc:
         updates["id"] = course_id
         _flash(request, str(exc), "error")
-        return _render(request, "course_form.html", course=updates)
+        return _render(
+            request,
+            "course_form.html",
+            course=updates,
+            course_id=course_id,
+            ucs=ucs,
+        )
 
 
 @app.post("/courses/{course_id}/delete")
@@ -195,15 +261,21 @@ def rooms_list(request: Request):
 
 @app.get("/rooms/new")
 def rooms_new(request: Request):
-    return _render(request, "room_form.html", room=None)
+    return _render(
+        request,
+        "room_form.html",
+        room=None,
+        room_id=_next_id(list_rooms()),
+    )
 
 
 @app.post("/rooms/new")
 def rooms_create(
     request: Request,
-    room_id: str = Form(...),
+    room_id: str = Form(""),
     nome: str = Form(...),
     capacidade: str = Form(...),
+    pavimento: str = Form(...),
     recursos: str = Form(""),
     ativo: str = Form("true"),
 ):
@@ -211,16 +283,22 @@ def rooms_create(
         "id": room_id,
         "nome": nome,
         "capacidade": _parse_int(capacidade) or capacidade,
+        "pavimento": pavimento,
         "recursos": [item.strip() for item in recursos.split(",") if item.strip()],
         "ativo": ativo == "true",
     }
     try:
         create_room(payload)
-        _flash(request, "Sala cadastrada com sucesso.")
+        _flash(request, "Ambiente cadastrado com sucesso.")
         return RedirectResponse("/rooms", status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
-        return _render(request, "room_form.html", room=payload)
+        return _render(
+            request,
+            "room_form.html",
+            room=payload,
+            room_id=payload.get("id"),
+        )
 
 
 @app.get("/rooms/{room_id}/edit")
@@ -234,38 +312,54 @@ def rooms_update(
     room_id: str,
     nome: str = Form(...),
     capacidade: str = Form(...),
+    pavimento: str = Form(...),
     recursos: str = Form(""),
     ativo: str = Form("true"),
 ):
     updates = {
         "nome": nome,
         "capacidade": _parse_int(capacidade) or capacidade,
+        "pavimento": pavimento,
         "recursos": [item.strip() for item in recursos.split(",") if item.strip()],
         "ativo": ativo == "true",
     }
     try:
         update_room(room_id, updates)
-        _flash(request, "Sala atualizada com sucesso.")
+        _flash(request, "Ambiente atualizado com sucesso.")
         return RedirectResponse("/rooms", status_code=303)
     except ValidationError as exc:
         updates["id"] = room_id
         _flash(request, str(exc), "error")
-        return _render(request, "room_form.html", room=updates)
+        return _render(
+            request,
+            "room_form.html",
+            room=updates,
+            room_id=room_id,
+        )
 
 
 @app.post("/rooms/{room_id}/delete")
 def rooms_delete(request: Request, room_id: str):
     try:
         delete_room(room_id)
-        _flash(request, "Sala removida com sucesso.")
+        _flash(request, "Ambiente removido com sucesso.")
     except ValidationError as exc:
         _flash(request, str(exc), "error")
     return RedirectResponse("/rooms", status_code=303)
 
 
 @app.get("/collaborators")
-def collaborators_list(request: Request):
-    return _render(request, "collaborators.html", instructors=list_instructors())
+def collaborators_list(request: Request, category: str = ""):
+    instructors = list_instructors()
+    selected = category.strip()
+    if selected and selected != "Todos":
+        instructors = [item for item in instructors if item.get("role") == selected]
+    return _render(
+        request,
+        "collaborators.html",
+        instructors=instructors,
+        category_filter=selected or "Todos",
+    )
 
 
 @app.get("/instructors")
@@ -275,7 +369,12 @@ def instructors_redirect():
 
 @app.get("/collaborators/new")
 def collaborators_new(request: Request):
-    return _render(request, "collaborator_form.html", instructor=None)
+    return _render(
+        request,
+        "collaborator_form.html",
+        instructor=None,
+        instructor_id=_next_id(list_instructors()),
+    )
 
 
 @app.get("/instructors/new")
@@ -287,10 +386,11 @@ def instructors_new_redirect():
 @app.post("/instructors/new")
 def collaborators_create(
     request: Request,
-    instructor_id: str = Form(...),
+    instructor_id: str = Form(""),
     nome: str = Form(...),
+    nome_sobrenome: str = Form(""),
     email: str = Form(...),
-    telefone: str = Form(""),
+    telefone: str = Form(...),
     role: str = Form("Instrutor"),
     especialidades: str = Form(""),
     max_horas_semana: str = Form(""),
@@ -299,6 +399,7 @@ def collaborators_create(
     payload = {
         "id": instructor_id,
         "nome": nome,
+        "nome_sobrenome": nome_sobrenome,
         "email": email,
         "telefone": telefone,
         "role": role,
@@ -312,7 +413,12 @@ def collaborators_create(
         return RedirectResponse("/collaborators", status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
-        return _render(request, "collaborator_form.html", instructor=payload)
+        return _render(
+            request,
+            "collaborator_form.html",
+            instructor=payload,
+            instructor_id=payload.get("id"),
+        )
 
 
 @app.get("/collaborators/{instructor_id}/edit")
@@ -335,8 +441,9 @@ def collaborators_update(
     request: Request,
     instructor_id: str,
     nome: str = Form(...),
+    nome_sobrenome: str = Form(""),
     email: str = Form(...),
-    telefone: str = Form(""),
+    telefone: str = Form(...),
     role: str = Form("Instrutor"),
     especialidades: str = Form(""),
     max_horas_semana: str = Form(""),
@@ -344,6 +451,7 @@ def collaborators_update(
 ):
     updates = {
         "nome": nome,
+        "nome_sobrenome": nome_sobrenome,
         "email": email,
         "telefone": telefone,
         "role": role,
@@ -358,7 +466,12 @@ def collaborators_update(
     except ValidationError as exc:
         updates["id"] = instructor_id
         _flash(request, str(exc), "error")
-        return _render(request, "collaborator_form.html", instructor=updates)
+        return _render(
+            request,
+            "collaborator_form.html",
+            instructor=updates,
+            instructor_id=instructor_id,
+        )
 
 
 @app.post("/collaborators/{instructor_id}/delete")
@@ -379,17 +492,21 @@ def shifts_list(request: Request):
 
 @app.get("/shifts/new")
 def shifts_new(request: Request):
-    return _render(request, "shift_form.html", shift=None)
+    return _render(
+        request,
+        "shift_form.html",
+        shift=None,
+        shift_id=_next_id(list_shifts()),
+    )
 
 
 @app.post("/shifts/new")
 def shifts_create(
     request: Request,
-    shift_id: str = Form(...),
+    shift_id: str = Form(""),
     nome: str = Form(...),
     horario_inicio: str = Form(...),
     horario_fim: str = Form(...),
-    dias_semana: str = Form(...),
     ativo: str = Form("true"),
 ):
     payload = {
@@ -397,7 +514,6 @@ def shifts_create(
         "nome": nome,
         "horario_inicio": horario_inicio,
         "horario_fim": horario_fim,
-        "dias_semana": _parse_days(dias_semana),
         "ativo": ativo == "true",
     }
     try:
@@ -406,7 +522,12 @@ def shifts_create(
         return RedirectResponse("/shifts", status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
-        return _render(request, "shift_form.html", shift=payload)
+        return _render(
+            request,
+            "shift_form.html",
+            shift=payload,
+            shift_id=payload.get("id"),
+        )
 
 
 @app.get("/shifts/{shift_id}/edit")
@@ -421,14 +542,12 @@ def shifts_update(
     nome: str = Form(...),
     horario_inicio: str = Form(...),
     horario_fim: str = Form(...),
-    dias_semana: str = Form(...),
     ativo: str = Form("true"),
 ):
     updates = {
         "nome": nome,
         "horario_inicio": horario_inicio,
         "horario_fim": horario_fim,
-        "dias_semana": _parse_days(dias_semana),
         "ativo": ativo == "true",
     }
     try:
@@ -438,7 +557,12 @@ def shifts_update(
     except ValidationError as exc:
         updates["id"] = shift_id
         _flash(request, str(exc), "error")
-        return _render(request, "shift_form.html", shift=updates)
+        return _render(
+            request,
+            "shift_form.html",
+            shift=updates,
+            shift_id=shift_id,
+        )
 
 
 @app.post("/shifts/{shift_id}/delete")
@@ -458,58 +582,119 @@ def calendars_list(request: Request):
 
 @app.get("/calendars/new")
 def calendars_new(request: Request):
-    return _render(request, "calendar_form.html", calendar=None)
+    return _render(
+        request,
+        "calendar_form.html",
+        calendar=None,
+        calendar_id=_next_id(list_calendars()),
+        months=MONTHS,
+    )
 
 
 @app.post("/calendars/new")
-def calendars_create(
+async def calendars_create(
     request: Request,
     ano: str = Form(...),
-    periodos_json: str = Form("[]"),
-    feriados_json: str = Form("[]"),
     ativo: str = Form("true"),
+    calendar_id: str = Form(""),
 ):
+    form_data = await request.form()
+    dias_letivos = [_parse_days_list(form_data.get(f"dias_letivos_{idx}", "")) for idx in range(1, 13)]
+    feriados = [_parse_days_list(form_data.get(f"feriados_{idx}", "")) for idx in range(1, 13)]
+    if not any(dias_letivos):
+        _flash(request, "Preencha ao menos um dia letivo no calendário.", "error")
+        return _render(
+            request,
+            "calendar_form.html",
+            calendar={
+                "id": calendar_id,
+                "ano": ano,
+                "dias_letivos_por_mes": dias_letivos,
+                "feriados_por_mes": feriados,
+                "ativo": ativo == "true",
+            },
+            calendar_id=calendar_id,
+            months=MONTHS,
+        )
     payload = {
+        "id": calendar_id,
         "ano": _parse_int(ano) or ano,
-        "periodos": _parse_json(periodos_json, []),
-        "feriados": _parse_json(feriados_json, []),
+        "dias_letivos_por_mes": dias_letivos,
+        "feriados_por_mes": feriados,
         "ativo": ativo == "true",
     }
     try:
         create_calendar(payload)
         _flash(request, "Calendário cadastrado com sucesso.")
         return RedirectResponse("/calendars", status_code=303)
-    except (ValidationError, json.JSONDecodeError) as exc:
+    except ValidationError as exc:
         _flash(request, str(exc), "error")
-        return _render(request, "calendar_form.html", calendar=payload)
+        return _render(
+            request,
+            "calendar_form.html",
+            calendar=payload,
+            calendar_id=payload.get("id"),
+            months=MONTHS,
+        )
 
 
 @app.get("/calendars/{year}/edit")
 def calendars_edit(request: Request, year: int):
-    return _render(request, "calendar_form.html", calendar=get_calendar(year))
+    calendar = get_calendar(year)
+    return _render(
+        request,
+        "calendar_form.html",
+        calendar=calendar,
+        calendar_id=calendar.get("id") if calendar else "",
+        months=MONTHS,
+    )
 
 
 @app.post("/calendars/{year}/edit")
-def calendars_update(
+async def calendars_update(
     request: Request,
     year: int,
-    periodos_json: str = Form("[]"),
-    feriados_json: str = Form("[]"),
     ativo: str = Form("true"),
+    calendar_id: str = Form(""),
 ):
+    form_data = await request.form()
+    dias_letivos = [_parse_days_list(form_data.get(f"dias_letivos_{idx}", "")) for idx in range(1, 13)]
+    feriados = [_parse_days_list(form_data.get(f"feriados_{idx}", "")) for idx in range(1, 13)]
+    if not any(dias_letivos):
+        _flash(request, "Preencha ao menos um dia letivo no calendário.", "error")
+        return _render(
+            request,
+            "calendar_form.html",
+            calendar={
+                "id": calendar_id,
+                "ano": year,
+                "dias_letivos_por_mes": dias_letivos,
+                "feriados_por_mes": feriados,
+                "ativo": ativo == "true",
+            },
+            calendar_id=calendar_id,
+            months=MONTHS,
+        )
     updates = {
-        "periodos": _parse_json(periodos_json, []),
-        "feriados": _parse_json(feriados_json, []),
+        "id": calendar_id,
+        "dias_letivos_por_mes": dias_letivos,
+        "feriados_por_mes": feriados,
         "ativo": ativo == "true",
     }
     try:
         update_calendar(year, updates)
         _flash(request, "Calendário atualizado com sucesso.")
         return RedirectResponse("/calendars", status_code=303)
-    except (ValidationError, json.JSONDecodeError) as exc:
+    except ValidationError as exc:
         updates["ano"] = year
         _flash(request, str(exc), "error")
-        return _render(request, "calendar_form.html", calendar=updates)
+        return _render(
+            request,
+            "calendar_form.html",
+            calendar=updates,
+            calendar_id=calendar_id,
+            months=MONTHS,
+        )
 
 
 @app.post("/calendars/{year}/delete")
@@ -662,40 +847,50 @@ def units_batch_create(
 @app.get("/programming")
 def programming_list(
     request: Request,
-    data_inicio: str = "",
-    data_fim: str = "",
-    sala_id: str = "",
-    instrutor_id: str = "",
-    turno_id: str = "",
+    ano: str = "",
+    mes: str = "",
 ):
     items = list_schedules()
 
-    if data_inicio:
-        items = [item for item in items if item.get("data_fim", "") >= data_inicio]
-    if data_fim:
-        items = [item for item in items if item.get("data_inicio", "") <= data_fim]
-    if sala_id:
-        items = [item for item in items if item.get("sala_id") == sala_id]
-    if instrutor_id:
-        items = [item for item in items if item.get("instrutor_id") == instrutor_id]
-    if turno_id:
-        items = [item for item in items if item.get("turno_id") == turno_id]
+    if ano:
+        items = [item for item in items if str(item.get("ano", "")) == str(ano)]
+    if mes:
+        items = [item for item in items if str(item.get("mes", "")) == str(mes)]
+
+    all_items = list_schedules()
+    if ano:
+        all_items = [item for item in all_items if str(item.get("ano", "")) == str(ano)]
+    months_available = {str(item.get("mes")) for item in all_items if item.get("mes")}
+    month_options = [month for month in MONTHS if month["value"] in months_available]
+    courses = list_courses()
+    rooms = list_rooms()
+    shifts = list_shifts()
+    instructors = list_instructors()
+    course_map = {item["id"]: item.get("nome", item["id"]) for item in courses}
+    room_map = {item["id"]: item.get("nome", item["id"]) for item in rooms}
+    shift_map = {item["id"]: item.get("nome", item["id"]) for item in shifts}
+    instructor_map = {
+        item["id"]: item.get("nome_sobrenome") or item.get("nome", item["id"])
+        for item in instructors
+    }
 
     return _render(
         request,
         "schedules.html",
         schedules=items,
-        courses=list_courses(),
-        units=list_units(),
-        instructors=list_instructors(),
-        rooms=list_rooms(),
-        shifts=list_shifts(),
+        courses=courses,
+        instructors=instructors,
+        rooms=rooms,
+        shifts=shifts,
+        course_map=course_map,
+        room_map=room_map,
+        shift_map=shift_map,
+        instructor_map=instructor_map,
+        months=month_options,
+        all_months=MONTHS,
         filters={
-            "data_inicio": data_inicio,
-            "data_fim": data_fim,
-            "sala_id": sala_id,
-            "instrutor_id": instrutor_id,
-            "turno_id": turno_id,
+            "ano": ano,
+            "mes": mes,
         },
     )
 
@@ -711,15 +906,20 @@ def schedules_redirect(request: Request):
 @app.get("/programming/new")
 @app.get("/schedules/new")
 def schedules_new(request: Request):
+    collaborators = list_instructors()
+    analysts = [item for item in collaborators if item.get("role") == "Analista"]
+    instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
     return _render(
         request,
         "schedule_form.html",
         schedule=None,
+        schedule_id=_next_id(list_schedules()),
         courses=list_courses(),
-        units=list_units(),
-        instructors=list_instructors(),
+        instructors=instructors,
+        analysts=analysts,
         rooms=list_rooms(),
         shifts=list_shifts(),
+        months=MONTHS,
     )
 
 
@@ -727,24 +927,51 @@ def schedules_new(request: Request):
 @app.post("/schedules/new")
 def schedules_create(
     request: Request,
-    schedule_id: str = Form(...),
-    curso_id: str = Form(...),
-    unidade_id: str = Form(...),
-    instrutor_id: str = Form(...),
-    sala_id: str = Form(...),
+    schedule_id: str = Form(""),
+    ano: str = Form(...),
+    mes: str = Form(...),
     turno_id: str = Form(...),
+    pavimento: str = Form(...),
+    curso_id: str = Form(...),
+    sala_id: str = Form(...),
+    qtd_alunos: str = Form(...),
+    recurso_tipo: str = Form(""),
     data_inicio: str = Form(...),
     data_fim: str = Form(...),
+    ch_total: str = Form(...),
+    turma: str = Form(...),
+    hora_inicio: str = Form(...),
+    hora_fim: str = Form(...),
+    analista_id: str = Form(...),
+    instrutor_id: str = Form(...),
+    dias_execucao: List[str] = Form([]),
+    observacoes: str = Form(""),
 ):
+    course = get_course(curso_id)
+    room = get_room(sala_id)
+    ch_value = course.get("carga_horaria_total") if course else ch_total
+    floor_value = room.get("pavimento") if room else pavimento
+    capacity_value = room.get("capacidade") if room else qtd_alunos
     payload = {
         "id": schedule_id,
+        "ano": _parse_int(ano) or ano,
+        "mes": _parse_int(mes) or mes,
         "curso_id": curso_id,
-        "unidade_id": unidade_id,
         "instrutor_id": instrutor_id,
+        "analista_id": analista_id,
         "sala_id": sala_id,
+        "pavimento": floor_value,
+        "qtd_alunos": _parse_int(qtd_alunos) or capacity_value,
         "turno_id": turno_id,
+        "recurso_tipo": recurso_tipo,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
+        "ch_total": _parse_int(ch_total) or ch_value,
+        "turma": turma,
+        "hora_inicio": hora_inicio,
+        "hora_fim": hora_fim,
+        "dias_execucao": dias_execucao,
+        "observacoes": observacoes,
     }
     try:
         create_schedule(payload)
@@ -752,30 +979,40 @@ def schedules_create(
         return RedirectResponse("/programming", status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
+        collaborators = list_instructors()
+        analysts = [item for item in collaborators if item.get("role") == "Analista"]
+        instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
         return _render(
             request,
             "schedule_form.html",
             schedule=payload,
+            schedule_id=payload.get("id"),
             courses=list_courses(),
-            units=list_units(),
-            instructors=list_instructors(),
+            instructors=instructors,
+            analysts=analysts,
             rooms=list_rooms(),
             shifts=list_shifts(),
+            months=MONTHS,
         )
 
 
 @app.get("/programming/{schedule_id}/edit")
 @app.get("/schedules/{schedule_id}/edit")
 def schedules_edit(request: Request, schedule_id: str):
+    collaborators = list_instructors()
+    analysts = [item for item in collaborators if item.get("role") == "Analista"]
+    instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
     return _render(
         request,
         "schedule_form.html",
         schedule=get_schedule(schedule_id),
+        schedule_id=schedule_id,
         courses=list_courses(),
-        units=list_units(),
-        instructors=list_instructors(),
+        instructors=instructors,
+        analysts=analysts,
         rooms=list_rooms(),
         shifts=list_shifts(),
+        months=MONTHS,
     )
 
 
@@ -784,22 +1021,49 @@ def schedules_edit(request: Request, schedule_id: str):
 def schedules_update(
     request: Request,
     schedule_id: str,
-    curso_id: str = Form(...),
-    unidade_id: str = Form(...),
-    instrutor_id: str = Form(...),
-    sala_id: str = Form(...),
+    ano: str = Form(...),
+    mes: str = Form(...),
     turno_id: str = Form(...),
+    pavimento: str = Form(...),
+    curso_id: str = Form(...),
+    sala_id: str = Form(...),
+    qtd_alunos: str = Form(...),
+    recurso_tipo: str = Form(""),
     data_inicio: str = Form(...),
     data_fim: str = Form(...),
+    ch_total: str = Form(...),
+    turma: str = Form(...),
+    hora_inicio: str = Form(...),
+    hora_fim: str = Form(...),
+    analista_id: str = Form(...),
+    instrutor_id: str = Form(...),
+    dias_execucao: List[str] = Form([]),
+    observacoes: str = Form(""),
 ):
+    course = get_course(curso_id)
+    room = get_room(sala_id)
+    ch_value = course.get("carga_horaria_total") if course else ch_total
+    floor_value = room.get("pavimento") if room else pavimento
+    capacity_value = room.get("capacidade") if room else qtd_alunos
     updates = {
+        "ano": _parse_int(ano) or ano,
+        "mes": _parse_int(mes) or mes,
         "curso_id": curso_id,
-        "unidade_id": unidade_id,
         "instrutor_id": instrutor_id,
+        "analista_id": analista_id,
         "sala_id": sala_id,
+        "pavimento": floor_value,
+        "qtd_alunos": _parse_int(qtd_alunos) or capacity_value,
         "turno_id": turno_id,
+        "recurso_tipo": recurso_tipo,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
+        "ch_total": _parse_int(ch_total) or ch_value,
+        "turma": turma,
+        "hora_inicio": hora_inicio,
+        "hora_fim": hora_fim,
+        "dias_execucao": dias_execucao,
+        "observacoes": observacoes,
     }
     try:
         update_schedule(schedule_id, updates)
@@ -808,15 +1072,20 @@ def schedules_update(
     except ValidationError as exc:
         updates["id"] = schedule_id
         _flash(request, str(exc), "error")
+        collaborators = list_instructors()
+        analysts = [item for item in collaborators if item.get("role") == "Analista"]
+        instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
         return _render(
             request,
             "schedule_form.html",
             schedule=updates,
+            schedule_id=schedule_id,
             courses=list_courses(),
-            units=list_units(),
-            instructors=list_instructors(),
+            instructors=instructors,
+            analysts=analysts,
             rooms=list_rooms(),
             shifts=list_shifts(),
+            months=MONTHS,
         )
 
 
@@ -850,20 +1119,6 @@ def chronograms_list(
         "analista_id": analista_id,
         "assistente_id": assistente_id,
     }
-    months = [
-        {"value": "1", "label": "Janeiro"},
-        {"value": "2", "label": "Fevereiro"},
-        {"value": "3", "label": "Março"},
-        {"value": "4", "label": "Abril"},
-        {"value": "5", "label": "Maio"},
-        {"value": "6", "label": "Junho"},
-        {"value": "7", "label": "Julho"},
-        {"value": "8", "label": "Agosto"},
-        {"value": "9", "label": "Setembro"},
-        {"value": "10", "label": "Outubro"},
-        {"value": "11", "label": "Novembro"},
-        {"value": "12", "label": "Dezembro"},
-    ]
     collaborators = list_instructors()
     instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
     analysts = [item for item in collaborators if item.get("role") == "Analista"]
@@ -872,7 +1127,7 @@ def chronograms_list(
         request,
         "chronograms.html",
         filters=filters,
-        months=months,
+        months=MONTHS,
         shifts=list_shifts(),
         instructors=instructors,
         analysts=analysts,

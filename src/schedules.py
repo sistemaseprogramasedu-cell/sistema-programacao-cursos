@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Any, Dict, List
 
 from .storage import (
@@ -9,34 +8,35 @@ from .storage import (
     ensure_unique_id,
     find_item,
     load_items,
+    next_numeric_id,
     require_fields,
     save_items,
 )
 
 FILENAME = "schedules.json"
 COURSES_FILE = "courses.json"
-UNITS_FILE = "curricular_units.json"
 INSTRUCTORS_FILE = "instructors.json"
 ROOMS_FILE = "rooms.json"
 SHIFTS_FILE = "shifts.json"
 REQUIRED_FIELDS = [
     "id",
+    "ano",
+    "mes",
     "curso_id",
-    "unidade_id",
     "instrutor_id",
+    "analista_id",
     "sala_id",
+    "pavimento",
+    "qtd_alunos",
     "turno_id",
     "data_inicio",
     "data_fim",
+    "ch_total",
+    "hora_inicio",
+    "hora_fim",
+    "turma",
+    "dias_execucao",
 ]
-
-
-@dataclass(frozen=True)
-class Shift:
-    name: str
-    start: time
-    end: time
-    days: List[str]
 
 
 def list_schedules() -> List[Dict[str, Any]]:
@@ -48,8 +48,10 @@ def get_schedule(schedule_id: str) -> Dict[str, Any] | None:
 
 
 def create_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
-    require_fields(payload, REQUIRED_FIELDS)
     items = load_items(FILENAME)
+    if not payload.get("id"):
+        payload["id"] = next_numeric_id(items)
+    require_fields(payload, REQUIRED_FIELDS)
     ensure_unique_id(items, payload["id"])
     _validate_references(payload)
     _validate_conflicts(items, payload)
@@ -83,9 +85,9 @@ def delete_schedule(schedule_id: str) -> None:
 
 def _validate_references(payload: Dict[str, Any]) -> None:
     _ensure_exists(COURSES_FILE, payload["curso_id"], "Curso")
-    _ensure_exists(UNITS_FILE, payload["unidade_id"], "Unidade curricular")
-    _ensure_exists(INSTRUCTORS_FILE, payload["instrutor_id"], "Colaborador")
-    _ensure_exists(ROOMS_FILE, payload["sala_id"], "Sala")
+    _ensure_instructor(payload["instrutor_id"], "Instrutor")
+    _ensure_instructor(payload["analista_id"], "Analista")
+    _ensure_exists(ROOMS_FILE, payload["sala_id"], "Ambiente")
     _ensure_exists(SHIFTS_FILE, payload["turno_id"], "Turno")
 
 
@@ -95,11 +97,23 @@ def _ensure_exists(filename: str, item_id: str, label: str) -> None:
         raise ValidationError(f"{label} não encontrado: {item_id}")
 
 
-def _parse_date(raw: str) -> datetime:
-    try:
-        return datetime.strptime(raw, "%Y-%m-%d")
-    except ValueError as exc:
-        raise ValidationError(f"Data inválida: {raw}") from exc
+def _ensure_instructor(instructor_id: str, role: str) -> None:
+    items = load_items(INSTRUCTORS_FILE)
+    instructor = find_item(items, instructor_id)
+    if not instructor:
+        raise ValidationError(f"Colaborador não encontrado: {instructor_id}")
+    if instructor.get("role") != role:
+        raise ValidationError(f"Colaborador informado não é da categoria {role}.")
+
+
+def _parse_date(raw: str) -> date:
+    formats = ["%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"]
+    for fmt in formats:
+        try:
+            return datetime.strptime(raw, fmt).date()
+        except ValueError:
+            continue
+    raise ValidationError(f"Data inválida: {raw}")
 
 
 def _parse_time(raw: str) -> time:
@@ -109,20 +123,7 @@ def _parse_time(raw: str) -> time:
         raise ValidationError(f"Horário inválido: {raw}") from exc
 
 
-def _load_shift(shift_id: str) -> Shift:
-    shifts = load_items(SHIFTS_FILE)
-    shift = find_item(shifts, shift_id)
-    if not shift:
-        raise ValidationError(f"Turno não encontrado: {shift_id}")
-    start = _parse_time(shift.get("horario_inicio", ""))
-    end = _parse_time(shift.get("horario_fim", ""))
-    days = shift.get("dias_semana") or []
-    if not days:
-        raise ValidationError(f"Turno sem dias da semana configurados: {shift_id}")
-    return Shift(name=shift.get("nome", ""), start=start, end=end, days=days)
-
-
-def _date_ranges_overlap(start_a: datetime, end_a: datetime, start_b: datetime, end_b: datetime) -> bool:
+def _date_ranges_overlap(start_a: date, end_a: date, start_b: date, end_b: date) -> bool:
     return start_a <= end_b and start_b <= end_a
 
 
@@ -135,16 +136,16 @@ def _validate_conflicts(existing: List[Dict[str, Any]], payload: Dict[str, Any])
     end = _parse_date(payload["data_fim"])
     if start > end:
         raise ValidationError("Data início não pode ser maior que data fim.")
-    shift = _load_shift(payload["turno_id"])
-    _validate_instructor_workload(existing, payload, shift)
+    _validate_dates_and_times(payload)
+    _validate_instructor_workload(existing, payload)
+
+    payload_days = set(payload.get("dias_execucao") or [])
+    start_time = _parse_time(payload["hora_inicio"])
+    end_time = _parse_time(payload["hora_fim"])
 
     for item in existing:
-        if item.get("turno_id") != payload["turno_id"]:
-            # horários diferentes só conflitam se o turno cruzar horários
-            other_shift = _load_shift(item.get("turno_id"))
-        else:
-            other_shift = shift
-
+        if not item.get("data_inicio") or not item.get("data_fim"):
+            continue
         if not _date_ranges_overlap(
             start,
             end,
@@ -153,22 +154,25 @@ def _validate_conflicts(existing: List[Dict[str, Any]], payload: Dict[str, Any])
         ):
             continue
 
-        if not set(shift.days).intersection(other_shift.days):
+        other_days = set(item.get("dias_execucao") or [])
+        if payload_days and other_days and not payload_days.intersection(other_days):
             continue
 
-        if not _times_overlap(shift.start, shift.end, other_shift.start, other_shift.end):
-            continue
+        if item.get("hora_inicio") and item.get("hora_fim"):
+            other_start = _parse_time(item.get("hora_inicio", ""))
+            other_end = _parse_time(item.get("hora_fim", ""))
+            if not _times_overlap(start_time, end_time, other_start, other_end):
+                continue
 
         if item.get("sala_id") == payload["sala_id"]:
-            raise ValidationError("Conflito de sala: horário já reservado.")
+            raise ValidationError("Conflito de ambiente: horário já reservado.")
         if item.get("instrutor_id") == payload["instrutor_id"]:
-            raise ValidationError("Conflito de colaborador: horário já reservado.")
+            raise ValidationError("Conflito de instrutor: horário já reservado.")
 
 
 def _validate_instructor_workload(
     existing: List[Dict[str, Any]],
     payload: Dict[str, Any],
-    shift: Shift,
 ) -> None:
     instructors = load_items(INSTRUCTORS_FILE)
     instructor = find_item(instructors, payload["instrutor_id"])
@@ -178,15 +182,17 @@ def _validate_instructor_workload(
     if limit is None:
         return
 
-    duration_hours = _shift_duration_hours(shift)
-    weekly_hours = duration_hours * len(shift.days)
+    duration_hours = _duration_hours(payload["hora_inicio"], payload["hora_fim"])
+    weekly_hours = duration_hours * len(payload.get("dias_execucao") or [])
 
     total = weekly_hours
     for item in existing:
         if item.get("instrutor_id") != payload["instrutor_id"]:
             continue
-        other_shift = _load_shift(item.get("turno_id"))
-        total += _shift_duration_hours(other_shift) * len(other_shift.days)
+        if item.get("hora_inicio") and item.get("hora_fim"):
+            total += _duration_hours(item["hora_inicio"], item["hora_fim"]) * len(
+                item.get("dias_execucao") or []
+            )
 
     if total > float(limit):
         raise ValidationError(
@@ -194,9 +200,26 @@ def _validate_instructor_workload(
         )
 
 
-def _shift_duration_hours(shift: Shift) -> float:
-    start_minutes = shift.start.hour * 60 + shift.start.minute
-    end_minutes = shift.end.hour * 60 + shift.end.minute
+def _duration_hours(start_raw: str, end_raw: str) -> float:
+    start_time = _parse_time(start_raw)
+    end_time = _parse_time(end_raw)
+    start_minutes = start_time.hour * 60 + start_time.minute
+    end_minutes = end_time.hour * 60 + end_time.minute
     if end_minutes <= start_minutes:
-        raise ValidationError("Turno inválido: horário final deve ser maior que o inicial.")
+        raise ValidationError("Horário final deve ser maior que o inicial.")
     return (end_minutes - start_minutes) / 60
+
+
+def _validate_dates_and_times(payload: Dict[str, Any]) -> None:
+    _parse_date(payload["data_inicio"])
+    _parse_date(payload["data_fim"])
+    if not payload.get("dias_execucao"):
+        raise ValidationError("Dias de execução são obrigatórios.")
+    _duration_hours(payload["hora_inicio"], payload["hora_fim"])
+    turma = payload.get("turma", "")
+    if not turma:
+        raise ValidationError("Número da turma é obrigatório.")
+    import re
+
+    if not re.fullmatch(r"\d{3}\.28\.\d{4}", turma):
+        raise ValidationError("Número da turma inválido. Formato esperado: 000.28.0000.")
