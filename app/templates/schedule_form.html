@@ -35,7 +35,7 @@
         <label>Turno</label>
         <select name="turno_id" required>
           {% for shift in shifts %}
-            <option value="{{ shift.id }}" {% if schedule and schedule.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
+            <option value="{{ shift.id }}" data-start="{{ shift.horario_inicio }}" data-end="{{ shift.horario_fim }}" data-hs="{{ shift.hs_dia }}" {% if schedule and schedule.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
           {% endfor %}
         </select>
       </div>
@@ -72,12 +72,12 @@
     </div>
     <div class="form-row">
       <div>
-        <label>Data Inicial (DD/MM/AA)</label>
-        <input name="data_inicio" value="{{ schedule.data_inicio if schedule else '' }}" required />
+        <label>Data Inicial (DD/MM/AAAA)</label>
+        <input name="data_inicio" class="date-mask" value="{{ schedule.data_inicio if schedule else '' }}" required />
       </div>
       <div>
-        <label>Data Final (DD/MM/AA)</label>
-        <input name="data_fim" value="{{ schedule.data_fim if schedule else '' }}" required />
+        <label>Data Final (DD/MM/AAAA)</label>
+        <input name="data_fim" class="date-mask" value="{{ schedule.data_fim if schedule else '' }}" required />
       </div>
       <div>
         <label>CH</label>
@@ -87,15 +87,19 @@
     <div class="form-row">
       <div>
         <label>Nº da Turma</label>
-        <input name="turma" value="{{ schedule.turma if schedule else '' }}" placeholder="123.28.2026" pattern="\\d{3}\\.28\\.\\d{4}" required />
+        <input name="turma" id="turma" value="{{ schedule.turma if schedule else '' }}" placeholder="0000.00.000" pattern="\\d{4}\\.\\d{2}\\.\\d{3}" required />
       </div>
       <div>
         <label>Hora Inicial</label>
-        <input name="hora_inicio" value="{{ schedule.hora_inicio if schedule else '' }}" type="time" required />
+        <input name="hora_inicio" id="hora-inicio" class="time-field" value="{{ schedule.hora_inicio if schedule else '' }}" type="time" required />
       </div>
       <div>
         <label>Hora Final</label>
-        <input name="hora_fim" value="{{ schedule.hora_fim if schedule else '' }}" type="time" required />
+        <input name="hora_fim" id="hora-fim" class="time-field" value="{{ schedule.hora_fim if schedule else '' }}" type="time" required />
+      </div>
+      <div>
+        <label>Hs/Dia</label>
+        <input id="hs-dia" class="time-field" value="{{ schedule.hs_dia if schedule else '' }}" readonly />
       </div>
     </div>
     <div class="form-row">
@@ -147,6 +151,11 @@
   const qtdAlunosInput = document.getElementById("qtd-alunos");
   const cursoSelect = document.getElementById("curso-select");
   const chTotalInput = document.getElementById("ch-total");
+  const turnoSelect = document.querySelector("select[name='turno_id']");
+  const horaInicioInput = document.getElementById("hora-inicio");
+  const horaFimInput = document.getElementById("hora-fim");
+  const hsDiaInput = document.getElementById("hs-dia");
+  const turmaInput = document.getElementById("turma");
 
   function atualizarAmbiente() {
     const option = ambienteSelect.selectedOptions[0];
@@ -164,6 +173,74 @@
     chTotalInput.value = option.dataset.ch || "";
   }
 
+  function calcularHsDia() {
+    if (!horaInicioInput.value || !horaFimInput.value) {
+      hsDiaInput.value = "";
+      return;
+    }
+    const [startH, startM] = horaInicioInput.value.split(":").map(Number);
+    const [endH, endM] = horaFimInput.value.split(":").map(Number);
+    const start = startH * 60 + startM;
+    const end = endH * 60 + endM;
+    if (end <= start) {
+      hsDiaInput.value = "";
+      return;
+    }
+    const diff = end - start;
+    const hours = String(Math.floor(diff / 60)).padStart(2, "0");
+    const minutes = String(diff % 60).padStart(2, "0");
+    hsDiaInput.value = `${hours}:${minutes}`;
+  }
+
+  function atualizarTurno() {
+    const option = turnoSelect.selectedOptions[0];
+    if (!option) return;
+    if (!horaInicioInput.value || horaInicioInput.dataset.auto === "true") {
+      if (option.dataset.start) {
+        horaInicioInput.value = option.dataset.start;
+      }
+      horaInicioInput.dataset.auto = "true";
+    }
+    if (!horaFimInput.value || horaFimInput.dataset.auto === "true") {
+      if (option.dataset.end) {
+        horaFimInput.value = option.dataset.end;
+      }
+      horaFimInput.dataset.auto = "true";
+    }
+    if (option.dataset.hs) {
+      hsDiaInput.value = option.dataset.hs;
+    } else {
+      calcularHsDia();
+    }
+  }
+
+  function aplicarMascaraData(input) {
+    const digits = input.value.replace(/\D/g, "").slice(0, 8);
+    const day = digits.slice(0, 2);
+    const month = digits.slice(2, 4);
+    const year = digits.slice(4, 8);
+    let masked = day;
+    if (month) masked += `/${month}`;
+    if (year) masked += `/${year}`;
+    input.value = masked;
+  }
+
+  function validarData(input) {
+    const value = input.value.trim();
+    return /^\d{2}\/\d{2}\/\d{4}$/.test(value);
+  }
+
+  function aplicarMascaraTurma() {
+    const digits = turmaInput.value.replace(/\D/g, "").slice(0, 9);
+    const part1 = digits.slice(0, 4);
+    const part2 = digits.slice(4, 6);
+    const part3 = digits.slice(6, 9);
+    let masked = part1;
+    if (part2) masked += `.${part2}`;
+    if (part3) masked += `.${part3}`;
+    turmaInput.value = masked;
+  }
+
   qtdAlunosInput.addEventListener("input", () => {
     qtdAlunosInput.dataset.auto = "false";
   });
@@ -172,8 +249,46 @@
     atualizarAmbiente();
   });
   cursoSelect.addEventListener("change", atualizarCurso);
+  turnoSelect.addEventListener("change", atualizarTurno);
+  horaInicioInput.addEventListener("input", () => {
+    horaInicioInput.dataset.auto = "false";
+    calcularHsDia();
+  });
+  horaFimInput.addEventListener("input", () => {
+    horaFimInput.dataset.auto = "false";
+    calcularHsDia();
+  });
+
+  document.querySelectorAll(".date-mask").forEach((input) => {
+    input.addEventListener("input", () => aplicarMascaraData(input));
+    input.addEventListener("blur", () => {
+      if (input.value && !validarData(input)) {
+        input.classList.add("input-error");
+      } else {
+        input.classList.remove("input-error");
+      }
+    });
+  });
+
+  turmaInput.addEventListener("input", aplicarMascaraTurma);
+  aplicarMascaraTurma();
 
   atualizarAmbiente();
   atualizarCurso();
+  atualizarTurno();
+  calcularHsDia();
+
+  document.getElementById("schedule-form").addEventListener("submit", (event) => {
+    const invalidDates = Array.from(document.querySelectorAll(".date-mask")).some(
+      (input) => !validarData(input)
+    );
+    const turmaValida = /^\d{4}\.\d{2}\.\d{3}$/.test(turmaInput.value.trim());
+    if (invalidDates || !turmaValida) {
+      event.preventDefault();
+      if (!turmaValida) {
+        turmaInput.classList.add("input-error");
+      }
+    }
+  });
 </script>
 {% endblock %}

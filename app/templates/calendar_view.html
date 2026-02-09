@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% set title = "Modo Calendário" %}
+{% block content %}
+<div class="frame">
+  <div class="frame-header">
+    <h3>Calendário {{ calendar.ano }}</h3>
+    <div class="actions">
+      <a class="button ghost" href="/calendars">Voltar</a>
+    </div>
+  </div>
+  <div class="panel-grid">
+    {% for month in months_view %}
+      <div class="panel">
+        <div class="panel-header">
+          <strong>{{ month.label }}</strong>
+        </div>
+        <div class="calendar-header">
+          {% for day_label in ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB"] %}
+            <span>{{ day_label }}</span>
+          {% endfor %}
+        </div>
+        <div class="calendar-grid">
+          {% for week in month.weeks %}
+            {% for day in week %}
+              {% if day %}
+                {% if day in month.feriados %}
+                  <div class="calendar-day feriado">{{ day }}</div>
+                {% elif day in month.letivos %}
+                  <div class="calendar-day letivo">{{ day }}</div>
+                {% else %}
+                  <div class="calendar-day">{{ day }}</div>
+                {% endif %}
+              {% else %}
+                <div class="calendar-day empty"></div>
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

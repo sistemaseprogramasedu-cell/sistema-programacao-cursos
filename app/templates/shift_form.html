@@ -21,11 +21,15 @@
   <div class="form-row">
     <div>
       <label>Horário início</label>
-      <input name="horario_inicio" value="{{ shift.horario_inicio if shift else '' }}" required />
+      <input name="horario_inicio" id="horario-inicio" type="time" value="{{ shift.horario_inicio if shift else '' }}" required />
     </div>
     <div>
       <label>Horário fim</label>
-      <input name="horario_fim" value="{{ shift.horario_fim if shift else '' }}" required />
+      <input name="horario_fim" id="horario-fim" type="time" value="{{ shift.horario_fim if shift else '' }}" required />
+    </div>
+    <div>
+      <label>Hs/Dia</label>
+      <input name="hs_dia" id="hs-dia" value="{{ shift.hs_dia if shift else '' }}" readonly />
     </div>
     <div>
       <label>Status</label>
@@ -40,4 +44,33 @@
     <a class="button ghost" href="/shifts">Cancelar</a>
   </div>
 </form>
+
+<script>
+  const inicioInput = document.getElementById("horario-inicio");
+  const fimInput = document.getElementById("horario-fim");
+  const hsDiaInput = document.getElementById("hs-dia");
+
+  function calcularHsDia() {
+    if (!inicioInput.value || !fimInput.value) {
+      hsDiaInput.value = "";
+      return;
+    }
+    const [startH, startM] = inicioInput.value.split(":").map(Number);
+    const [endH, endM] = fimInput.value.split(":").map(Number);
+    const start = startH * 60 + startM;
+    const end = endH * 60 + endM;
+    if (end <= start) {
+      hsDiaInput.value = "";
+      return;
+    }
+    const diff = end - start;
+    const hours = String(Math.floor(diff / 60)).padStart(2, "0");
+    const minutes = String(diff % 60).padStart(2, "0");
+    hsDiaInput.value = `${hours}:${minutes}`;
+  }
+
+  inicioInput.addEventListener("input", calcularHsDia);
+  fimInput.addEventListener("input", calcularHsDia);
+  calcularHsDia();
+</script>
 {% endblock %}

@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  --bg: #f5f7fb;
+  --bg: #d6e4eb;
   --card: #ffffff;
   --text: #1f2937;
   --muted: #6b7280;
@@ -30,8 +30,8 @@ body {
 
 .sidebar {
   width: 240px;
-  background: #111827;
-  color: #f9fafb;
+  background: linear-gradient(180deg, #05031e 0%, #001ea0 100%);
+  color: #ffffff;
   padding: 24px 20px;
   display: flex;
   flex-direction: column;
@@ -45,33 +45,34 @@ body {
 
 .brand p {
   font-size: 12px;
-  color: #9ca3af;
+  color: #e2e8f0;
 }
 
 .nav-link {
   display: block;
   padding: 10px 12px;
   border-radius: 8px;
-  color: #e5e7eb;
+  color: #ffffff;
   text-decoration: none;
   margin-bottom: 6px;
 }
 
 .nav-link:hover {
-  background: #1f2937;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .nav-section {
   margin: 12px 0 8px;
   font-size: 11px;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: #e2e8f0;
   letter-spacing: 1px;
 }
 
 .content {
   flex: 1;
   padding: 24px 32px 40px;
+  background: var(--bg);
 }
 
 .topbar {
@@ -201,13 +202,22 @@ body {
   width: 100%;
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid #cbd5e1;
   font-size: 14px;
-  background: #fff;
+  background: #ffffff;
+  color: #000000;
 }
 
 .form textarea {
   min-height: 120px;
+}
+
+.form input:focus,
+.form select:focus,
+.form textarea:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.4);
+  outline-offset: 1px;
+  border-color: #93c5fd;
 }
 
 .form-row {
@@ -239,6 +249,26 @@ body {
 .frame-actions {
   display: flex;
   gap: 8px;
+}
+
+.frame-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.total-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 6px 12px;
 }
 
 .alert {
@@ -313,18 +343,23 @@ body {
 }
 
 .checkbox-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
   margin-top: 6px;
 }
 
 .checkbox-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-size: 13px;
   color: var(--text);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 .flash-area {
@@ -370,4 +405,68 @@ body {
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 12px;
+}
+
+.field-error {
+  font-size: 12px;
+  color: var(--error);
+  margin-top: 4px;
+}
+
+.input-error {
+  border-color: #fca5a5;
+  background: #fff5f5;
+}
+
+.time-field {
+  max-width: 140px;
+}
+
+.calendar-header {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(40px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(40px, 1fr));
+  gap: 6px;
+}
+
+.calendar-day {
+  min-height: 36px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.calendar-day.empty {
+  background: transparent;
+  border: 1px dashed #cbd5e1;
+  color: var(--muted);
+}
+
+.calendar-day.letivo {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+  font-weight: 600;
+}
+
+.calendar-day.feriado {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+  font-weight: 600;
 }

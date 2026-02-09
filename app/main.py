@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar as calendar_module
 import json
 from datetime import date
 from typing import Any, Dict, List, Optional
@@ -130,6 +131,46 @@ def _parse_days_list(raw: str) -> List[int]:
     return items
 
 
+def _sum_uc_hours(ucs: List[Dict[str, Any]]) -> str:
+    total = 0.0
+    for unit in ucs:
+        value = unit.get("carga_horaria")
+        if isinstance(value, (int, float)):
+            total += float(value)
+        elif isinstance(value, str):
+            parsed = _parse_float(value)
+            if parsed is not None:
+                total += parsed
+    total_str = f"{total:.2f}".replace(".00", "")
+    return total_str
+
+
+def _build_month_grid(year: int, month: int) -> List[List[Optional[int]]]:
+    days_in_month = calendar_module.monthrange(year, month)[1]
+    weeks: List[List[Optional[int]]] = []
+    week: List[Optional[int]] = []
+    for day in range(1, days_in_month + 1):
+        weekday = date(year, month, day).weekday()
+        if weekday == 6:
+            if week:
+                while len(week) < 6:
+                    week.append(None)
+                weeks.append(week)
+            week = []
+            continue
+        if not week and weekday > 0:
+            week.extend([None] * weekday)
+        week.append(day)
+        if len(week) == 6:
+            weeks.append(week)
+            week = []
+    if week:
+        while len(week) < 6:
+            week.append(None)
+        weeks.append(week)
+    return weeks
+
+
 @app.get("/")
 def dashboard(request: Request):
     return _render(
@@ -160,6 +201,7 @@ def courses_new(request: Request):
         course=None,
         course_id=_next_id(list_courses()),
         ucs=[],
+        total_ucs_ch=0,
     )
 
 
@@ -194,6 +236,7 @@ def courses_create(
             course=payload,
             course_id=payload.get("id"),
             ucs=ucs,
+            total_ucs_ch=_sum_uc_hours(ucs),
         )
 
 
@@ -207,6 +250,7 @@ def courses_edit(request: Request, course_id: str):
         course=course,
         course_id=course_id,
         ucs=ucs,
+        total_ucs_ch=_sum_uc_hours(ucs),
     )
 
 
@@ -241,6 +285,7 @@ def courses_update(
             course=updates,
             course_id=course_id,
             ucs=ucs,
+            total_ucs_ch=_sum_uc_hours(ucs),
         )
 
 
@@ -705,6 +750,30 @@ def calendars_delete(request: Request, year: int):
     except ValidationError as exc:
         _flash(request, str(exc), "error")
     return RedirectResponse("/calendars", status_code=303)
+
+
+@app.get("/calendars/{year}/calendar-view")
+def calendars_view(request: Request, year: int):
+    calendar = get_calendar(year)
+    if not calendar:
+        _flash(request, "Calendário não encontrado.", "error")
+        return RedirectResponse("/calendars", status_code=302)
+    months_view = []
+    for idx, month in enumerate(MONTHS, start=1):
+        months_view.append(
+            {
+                "label": month["label"],
+                "weeks": _build_month_grid(year, idx),
+                "letivos": set(calendar.get("dias_letivos_por_mes", [[] for _ in range(12)])[idx - 1]),
+                "feriados": set(calendar.get("feriados_por_mes", [[] for _ in range(12)])[idx - 1]),
+            }
+        )
+    return _render(
+        request,
+        "calendar_view.html",
+        calendar=calendar,
+        months_view=months_view,
+    )
 
 
 @app.get("/curricular-units")
