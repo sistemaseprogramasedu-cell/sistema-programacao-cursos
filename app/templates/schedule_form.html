@@ -13,7 +13,7 @@
       </div>
       <div>
         <label>Ano</label>
-        <input name="ano" value="{{ schedule.ano if schedule else '' }}" required />
+        <input name="ano" id="ano" value="{{ schedule.ano if schedule else '' }}" required />
       </div>
       <div>
         <label>Mês</label>
@@ -73,11 +73,11 @@
     <div class="form-row">
       <div>
         <label>Data Inicial (DD/MM/AAAA)</label>
-        <input name="data_inicio" class="date-mask" value="{{ schedule.data_inicio if schedule else '' }}" required />
+        <input name="data_inicio" id="data-inicio" class="date-mask" value="{{ schedule.data_inicio if schedule else '' }}" required />
       </div>
       <div>
         <label>Data Final (DD/MM/AAAA)</label>
-        <input name="data_fim" class="date-mask" value="{{ schedule.data_fim if schedule else '' }}" required />
+        <input name="data_fim" id="data-fim" class="date-mask" value="{{ schedule.data_fim if schedule else '' }}" required />
       </div>
       <div>
         <label>CH</label>
@@ -87,7 +87,7 @@
     <div class="form-row">
       <div>
         <label>Nº da Turma</label>
-        <input name="turma" id="turma" value="{{ schedule.turma if schedule else '' }}" placeholder="0000.00.000" pattern="\\d{4}\\.\\d{2}\\.\\d{3}" required />
+        <input name="turma" id="turma" value="{{ schedule.turma if schedule else '' }}" placeholder="0000.00.000" pattern="\d{4}\.\d{2}\.\d{3}" inputmode="numeric" required />
       </div>
       <div>
         <label>Hora Inicial</label>
@@ -138,6 +138,7 @@
         <textarea name="observacoes">{{ schedule.observacoes if schedule else '' }}</textarea>
       </div>
     </div>
+    <div id="end-date-alert" class="alert" role="alert" style="display: none;"></div>
   </div>
   <div class="actions">
     <button class="button" type="submit">Salvar</button>
@@ -156,6 +157,10 @@
   const horaFimInput = document.getElementById("hora-fim");
   const hsDiaInput = document.getElementById("hs-dia");
   const turmaInput = document.getElementById("turma");
+  const anoInput = document.getElementById("ano");
+  const dataInicioInput = document.getElementById("data-inicio");
+  const dataFimInput = document.getElementById("data-fim");
+  const endDateAlert = document.getElementById("end-date-alert");
 
   function atualizarAmbiente() {
     const option = ambienteSelect.selectedOptions[0];
@@ -241,6 +246,76 @@
     turmaInput.value = masked;
   }
 
+  function showEndDateAlert(message, isError = false) {
+    if (!endDateAlert) return;
+    if (!message) {
+      endDateAlert.textContent = "";
+      endDateAlert.classList.remove("alert-error");
+      endDateAlert.style.display = "none";
+      return;
+    }
+    endDateAlert.textContent = message;
+    endDateAlert.classList.toggle("alert-error", isError);
+    endDateAlert.style.display = "block";
+  }
+
+  function getDiasExecucao() {
+    return Array.from(document.querySelectorAll("input[name='dias_execucao']"))
+      .filter((input) => input.checked)
+      .map((input) => input.value);
+  }
+
+  async function atualizarDataFinal() {
+    if (!anoInput || !dataInicioInput || !dataFimInput) return;
+    const year = anoInput.value.trim();
+    const start = dataInicioInput.value.trim();
+    const dias = getDiasExecucao();
+    const courseId = cursoSelect.value;
+    const shiftId = turnoSelect.value;
+
+    if (!year || !start || !dias.length || !courseId || !shiftId) {
+      dataFimInput.readOnly = false;
+      showEndDateAlert("", false);
+      return;
+    }
+
+    if (start.length < 10) {
+      dataFimInput.readOnly = false;
+      showEndDateAlert("", false);
+      return;
+    }
+
+    if (!validarData(dataInicioInput)) {
+      dataFimInput.readOnly = false;
+      showEndDateAlert("Informe uma data inicial válida para calcular a data final.", true);
+      return;
+    }
+
+    const params = new URLSearchParams({
+      year,
+      start,
+      days: dias.join(","),
+      course_id: courseId,
+      shift_id: shiftId,
+    });
+
+    try {
+      const response = await fetch(`/programming/compute-end-date?${params.toString()}`);
+      const payload = await response.json();
+      if (!response.ok) {
+        dataFimInput.readOnly = false;
+        showEndDateAlert(payload.error || "Não foi possível calcular a data final.", true);
+        return;
+      }
+      dataFimInput.value = payload.end_date || "";
+      dataFimInput.readOnly = true;
+      showEndDateAlert("Data final calculada automaticamente com base no calendário.", false);
+    } catch (error) {
+      dataFimInput.readOnly = false;
+      showEndDateAlert("Falha ao calcular a data final. Tente novamente.", true);
+    }
+  }
+
   qtdAlunosInput.addEventListener("input", () => {
     qtdAlunosInput.dataset.auto = "false";
   });
@@ -248,8 +323,8 @@
     qtdAlunosInput.dataset.auto = "true";
     atualizarAmbiente();
   });
-  cursoSelect.addEventListener("change", atualizarCurso);
   turnoSelect.addEventListener("change", atualizarTurno);
+  turnoSelect.addEventListener("change", atualizarDataFinal);
   horaInicioInput.addEventListener("input", () => {
     horaInicioInput.dataset.auto = "false";
     calcularHsDia();
@@ -277,6 +352,7 @@
   atualizarCurso();
   atualizarTurno();
   calcularHsDia();
+  atualizarDataFinal();
 
   document.getElementById("schedule-form").addEventListener("submit", (event) => {
     const invalidDates = Array.from(document.querySelectorAll(".date-mask")).some(
@@ -289,6 +365,18 @@
         turmaInput.classList.add("input-error");
       }
     }
+  });
+
+  cursoSelect.addEventListener("change", () => {
+    atualizarCurso();
+    atualizarDataFinal();
+  });
+
+  dataInicioInput.addEventListener("input", atualizarDataFinal);
+  anoInput.addEventListener("input", atualizarDataFinal);
+
+  document.querySelectorAll("input[name='dias_execucao']").forEach((input) => {
+    input.addEventListener("change", atualizarDataFinal);
   });
 </script>
 {% endblock %}
