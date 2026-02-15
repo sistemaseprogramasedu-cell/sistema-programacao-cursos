@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% set title = "Pre-cronograma" %}
+{% block content %}
+
+<div class="print-page">
+  <div class="chrono-sheet chrono-{{ layout }} {{ 'chrono-compact' if compact else '' }}">
+
+    <div class="chrono-top-actions">
+      <a class="button ghost" href="?layout=portrait&compact={{ 1 if compact else 0 }}">Retrato</a>
+      <a class="button ghost" href="?layout=landscape&compact={{ 1 if compact else 0 }}">Paisagem</a>
+      <a class="button ghost" href="?layout={{ layout }}&compact=1">Compacto</a>
+      <a class="button ghost" href="?layout={{ layout }}&compact=0">Normal</a>
+      <button class="button secondary" type="button" onclick="window.print()">Imprimir</button>
+      <a class="button ghost" href="/programming">Voltar</a>
+    </div>
+
+    <div class="chrono-header-top">
+      <div class="senac-block">
+        <div class="senac-logo-img">
+          <img src="{{ url_for('static', path='senac.jpg') }}" alt="SENAC" />
+        </div>
+
+        <div class="senac-text">
+          <div class="senac-line1">SERVICO NACIONAL DE APRENDIZAGEM COMERCIAL</div>
+          <div class="senac-line2">SENAC / PA - Sistema de Programacao</div>
+        </div>
+      </div>
+
+      <div class="chrono-title">PRE-CRONOGRAMA</div>
+
+      <div class="info-grid">
+        <div><span>Curso:</span> {{ header.curso }}</div>
+        <div><span>Tipo:</span> {{ header.tipo }}</div>
+        <div><span>Turma:</span> {{ header.turma }}</div>
+
+        <div><span>CH Total:</span> {{ header.ch_total }}</div>
+        <div><span>Turno:</span> {{ header.turno }}</div>
+        <div><span>Hs/Dia:</span> {{ header.hs_dia }}</div>
+
+        <div><span>Instrutor:</span> {{ header.instrutor }}</div>
+        <div><span>Analista:</span> {{ header.analista }}</div>
+        <div><span>Ambiente:</span> {{ header.ambiente }}</div>
+
+        <div><span>Pavimento:</span> {{ header.pavimento }}</div>
+        <div><span>Periodo:</span> {{ header.periodo }}</div>
+        <div><span>Dias:</span> {{ header.dias }}</div>
+
+        <div><span>Horario:</span> {{ header.horario }}</div>
+        <div><span>ID Oferta:</span> {{ schedule.id }}</div>
+      </div>
+    </div>
+
+    {% for month in months_data %}
+      <div class="month-frame">
+        <div class="month-bar">
+          <span class="month-main">{{ month.label|upper }} - {{ month.letivos_text }}</span>
+          <span class="month-sub">{{ month.year }}</span>
+        </div>
+
+        <div class="chrono-block {{ 'chrono-compact' if compact else '' }}" style="--cols: {{ month.dates|length }};">
+          <div class="chrono-header">
+            <div class="hcell time-col">Horario</div>
+            {% for d in month.dates %}
+              <div class="hcell">
+                <div class="dow">
+                  {% set w = d.weekday() %}
+                  {{ "SEG" if w==0 else "TER" if w==1 else "QUA" if w==2 else "QUI" if w==3 else "SEX" if w==4 else "SAB" }}
+                </div>
+                <div class="dom">{{ d.day }}</div>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if hour_slots %}
+            {% for slot in hour_slots %}
+              <div class="chrono-row">
+                <div class="tcell time-col">{{ slot.label }}</div>
+                {% for d in month.dates %}
+                  {% set key = d.isoformat() %}
+                  {% set day_label = day_uc_map.get(key, "") %}
+                  <div class="tcell uc-cell {{ 'uc-pi' if day_label == 'PI' else '' }}">{{ day_label }}</div>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="chrono-row">
+              <div class="tcell time-col">{{ header.horario }}</div>
+              {% for d in month.dates %}
+                {% set key = d.isoformat() %}
+                {% set day_label = day_uc_map.get(key, "") %}
+                <div class="tcell uc-cell {{ 'uc-pi' if day_label == 'PI' else '' }}">{{ day_label }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="chrono-row instr-row">
+            <div class="tcell time-col instr">Instrutor</div>
+            {% for d in month.dates %}
+              {% set key = d.isoformat() %}
+              <div class="tcell">{{ day_instrutor_map.get(key, header.instrutor_sigla) }}</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="uc-frame">
+      <div class="uc-frame-head">
+        <div class="uc-frame-title">Resumo das UCs</div>
+        <div class="uc-frame-sub">Distribuicao estimada por dias letivos</div>
+      </div>
+
+      <div class="uc-table">
+        <div class="uc-row uc-head">
+          <div>UC</div>
+          <div>Nome</div>
+          <div class="uc-right">CH</div>
+        </div>
+
+        {% for unit in units %}
+          {% set idx = loop.index %}
+          {% set is_pi = "projeto integrador" in (unit.nome|lower) or (unit.id|lower in ["pi","ucpi"]) %}
+          <div class="uc-row {{ 'uc-zebra' if loop.index is even else '' }} {{ 'uc-pi-row' if is_pi else '' }}">
+            <div>
+              <span class="uc-badge">{{ "PI" if is_pi else ("UC" ~ idx) }}</span>
+            </div>
+            <div class="uc-name">{{ unit.nome or "-" }}</div>
+            <div class="uc-right uc-ch">{{ unit.carga_horaria or "-" }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

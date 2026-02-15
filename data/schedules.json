@@ -1,5 +1,36 @@
 {
   "schema_version": "1.0",
-  "items": [],
+  "items": [
+    {
+      "id": "1",
+      "ano": 2026,
+      "mes": 3,
+      "curso_id": "1",
+      "instrutor_id": "3",
+      "analista_id": "1",
+      "sala_id": "2",
+      "pavimento": "1º Piso",
+      "qtd_alunos": 20,
+      "turno_id": "3",
+      "recurso_tipo": "PSG",
+      "data_inicio": "02/03/2026",
+      "data_fim": "08/06/2026",
+      "ch_total": 200,
+      "turma": "2026.28.059",
+      "hora_inicio": "19:00",
+      "hora_fim": "22:00",
+      "dias_execucao": [
+        "SEG",
+        "TER",
+        "QUA",
+        "QUI",
+        "SEX"
+      ],
+      "observacoes": "",
+      "instrutor_ids": [
+        "3"
+      ]
+    }
+  ],
   "notes": "Agendamentos de unidades curriculares por curso, sala e instrutor."
 }

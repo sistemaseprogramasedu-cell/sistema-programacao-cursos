@@ -1,5 +1,14 @@
 {
   "schema_version": "1.0",
-  "items": [],
+  "items": [
+    {
+      "id": "1",
+      "nome": "PROGRAMADOR DE SISTEMAS",
+      "tipo_curso": "Qualificação",
+      "carga_horaria_total": 200,
+      "ativo": true,
+      "nivel": "Qualificação"
+    }
+  ],
   "notes": "Cursos cadastrados no sistema."
 }

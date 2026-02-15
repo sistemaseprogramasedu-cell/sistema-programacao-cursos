@@ -2,8 +2,9 @@
 {% set title = "Colaboradores" %}
 {% block content %}
 <div class="actions">
-  <a class="button" href="/collaborators/new">Novo colaborador</a>
+  <a class="button collab-btn" href="/collaborators/new">Novo colaborador</a>
 </div>
+
 <table class="table">
   <thead>
     <tr>
@@ -20,24 +21,24 @@
   </thead>
   <tbody>
     {% for instructor in instructors %}
-    <tr>
-      <td>{{ instructor.id }}</td>
-      <td>{{ instructor.nome }}</td>
-      <td>{{ instructor.telefone }}</td>
-      <td>{{ instructor.email }}</td>
-      <td>{{ instructor.role }}</td>
-      <td>{{ instructor.especialidades | join(', ') }}</td>
-      <td>{{ instructor.max_horas_semana or '-' }}</td>
-      <td><span class="tag">{{ "Ativo" if instructor.ativo else "Inativo" }}</span></td>
-      <td>
-        <div class="actions">
-          <a class="button secondary" href="/collaborators/{{ instructor.id }}/edit">Editar</a>
-          <form method="post" action="/collaborators/{{ instructor.id }}/delete">
-            <button class="button danger" type="submit">Excluir</button>
-          </form>
-        </div>
-      </td>
-    </tr>
+      <tr>
+        <td>{{ instructor.id }}</td>
+        <td>{{ instructor.nome }}</td>
+        <td>{{ instructor.telefone }}</td>
+        <td>{{ instructor.email }}</td>
+        <td>{{ instructor.role }}</td>
+        <td>{{ instructor.especialidades | join(', ') }}</td>
+        <td>{{ instructor.max_horas_semana or '-' }}</td>
+        <td><span class="tag">{{ "Ativo" if instructor.ativo else "Inativo" }}</span></td>
+        <td>
+          <div class="actions collab-actions">
+            <a class="button secondary collab-btn" href="/collaborators/{{ instructor.id }}/edit">Editar</a>
+            <form method="post" action="/collaborators/{{ instructor.id }}/delete">
+              <button class="button danger collab-btn" type="submit">Excluir</button>
+            </form>
+          </div>
+        </td>
+      </tr>
     {% endfor %}
   </tbody>
 </table>
@@ -57,11 +58,30 @@
         <option value="Assistente" {% if selected == "Assistente" %}selected{% endif %}>Assistente</option>
       </select>
     </div>
-    <div class="actions">
-      <button class="button" type="submit">Aplicar filtro</button>
-      <button class="button secondary" type="button" onclick="window.print()">Imprimir</button>
-      <button class="button ghost" type="button" disabled>Exportar PDF (Em breve)</button>
+    <div class="actions collab-actions">
+      <button class="button collab-btn" type="submit">Aplicar filtro</button>
+      <button class="button secondary collab-btn" type="button" onclick="window.print()">Imprimir</button>
+      <button class="button ghost collab-btn" type="button" disabled>Exportar para PDF</button>
     </div>
   </form>
 </div>
+
+<style>
+  .collab-btn {
+    min-width: 100px;
+    height: 36px;
+    padding: 7px 12px;
+    font-size: 13px;
+    border-radius: 8px;
+    line-height: 1;
+  }
+  .collab-actions {
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .collab-actions form {
+    margin: 0;
+  }
+</style>
 {% endblock %}

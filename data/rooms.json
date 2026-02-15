@@ -1,5 +1,24 @@
 {
   "schema_version": "1.0",
-  "items": [],
+  "items": [
+    {
+      "id": "1",
+      "nome": "Laboratório de Tecnologia 01",
+      "capacidade": 25,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true,
+      "abreviacao": "Lab Tec 01"
+    },
+    {
+      "id": "2",
+      "nome": "Estúdio de Fotografia",
+      "capacidade": 20,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true,
+      "abreviacao": "Est. Foto"
+    }
+  ],
   "notes": "Ambientes cadastrados no sistema."
 }

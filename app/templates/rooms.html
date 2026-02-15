@@ -9,6 +9,7 @@
     <tr>
       <th>ID</th>
       <th>Nome</th>
+      <th>Abreviação</th>
       <th>Capacidade</th>
       <th>Pavimento</th>
       <th>Recursos</th>
@@ -21,6 +22,7 @@
     <tr>
       <td>{{ room.id }}</td>
       <td>{{ room.nome }}</td>
+      <td>{{ room.abreviacao or "—" }}</td>
       <td>{{ room.capacidade }}</td>
       <td>{{ room.pavimento }}</td>
       <td>{{ room.recursos | join(', ') }}</td>

@@ -1,24 +1,28 @@
 {% extends "base.html" %}
-{% set title = "Modo Calendário" %}
+{% set title = "Modo Calendario" %}
 {% block content %}
 <div class="frame">
   <div class="frame-header">
-    <h3>Calendário {{ calendar.ano }}</h3>
+    <h3>Calendario Letivo ({{ calendar.ano }})</h3>
     <div class="actions">
+      <button class="button secondary" type="button" onclick="window.print()">Imprimir</button>
       <a class="button ghost" href="/calendars">Voltar</a>
     </div>
   </div>
-  <div class="panel-grid">
+
+  <div class="calendar-year-grid">
     {% for month in months_view %}
-      <div class="panel">
-        <div class="panel-header">
-          <strong>{{ month.label }}</strong>
+      <div class="panel calendar-month-panel">
+        <div class="panel-header calendar-month-header">
+          <strong>{{ month.label }} - {{ month.letivos_count }} dias letivos</strong>
         </div>
+
         <div class="calendar-header">
-          {% for day_label in ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB"] %}
+          {% for day_label in ["SEG", "TER", "QUA", "QUI", "SEX", "SAB"] %}
             <span>{{ day_label }}</span>
           {% endfor %}
         </div>
+
         <div class="calendar-grid">
           {% for week in month.weeks %}
             {% for day in week %}
@@ -40,4 +44,122 @@
     {% endfor %}
   </div>
 </div>
+
+<style>
+  .calendar-year-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .calendar-month-panel {
+    min-width: 0;
+  }
+
+  .calendar-month-header strong {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .calendar-header {
+    grid-template-columns: repeat(6, minmax(28px, 1fr));
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(6, minmax(28px, 1fr));
+    gap: 4px;
+  }
+
+  .calendar-day {
+    min-height: 32px;
+    padding: 4px;
+    font-size: 12px;
+  }
+
+  @media (max-width: 1280px) {
+    .calendar-year-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 980px) {
+    .calendar-year-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .calendar-year-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 6mm;
+    }
+
+    .sidebar,
+    .topbar,
+    .flash-area,
+    .frame-header .actions {
+      display: none !important;
+    }
+
+    .content {
+      padding: 0 !important;
+    }
+
+    .frame {
+      border: 0 !important;
+      padding: 0 !important;
+      gap: 6px !important;
+    }
+
+    .frame-header {
+      margin-bottom: 2px;
+    }
+
+    .frame-header h3 {
+      font-size: 14px;
+    }
+
+    .calendar-year-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 6px !important;
+    }
+
+    .calendar-month-panel {
+      padding: 8px !important;
+      gap: 6px !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .calendar-month-header strong {
+      font-size: 10px !important;
+      line-height: 1.1;
+    }
+
+    .calendar-header {
+      gap: 2px !important;
+      margin-bottom: 2px !important;
+      font-size: 9px !important;
+    }
+
+    .calendar-grid {
+      gap: 2px !important;
+    }
+
+    .calendar-day {
+      min-height: 22px !important;
+      padding: 2px !important;
+      font-size: 10px !important;
+      border-radius: 5px !important;
+    }
+  }
+</style>
 {% endblock %}

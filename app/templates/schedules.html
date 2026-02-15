@@ -1,98 +1,279 @@
 {% extends "base.html" %}
-{% set title = "Criar Programação" %}
+{% set title = "Criar Programacao" %}
 {% block content %}
-<div class="panel-grid">
+
+<div class="panel-grid no-print" data-auto-print="{{ 1 if auto_print else 0 }}">
   <div class="panel">
     <div class="panel-header">
-      <h3>Programação</h3>
-      <a class="button" href="/programming/new">Nova Oferta</a>
+      <h3>Programacao</h3>
     </div>
-    <form class="filters" method="get">
-      <div>
-        <label>Exibir Programação Por Ano</label>
-        <input name="ano" value="{{ filters.ano }}" />
-      </div>
-      <div>
-        <label>Mês</label>
-        <select name="mes">
-          <option value="">Todos</option>
-          {% for month in months %}
-            <option value="{{ month.value }}" {% if filters.mes == month.value %}selected{% endif %}>{{ month.label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="actions">
-        <button class="button" type="submit">Aplicar filtros</button>
-        <a class="button ghost" href="/programming">Limpar</a>
-      </div>
-    </form>
-  </div>
-  <div class="panel">
-    <div class="panel-header">
-      <h3>Relatórios</h3>
-    </div>
-    <form class="filters" method="get">
-      <div>
+
+    <form class="filters filters-inline" method="get" id="report-filters-form">
+      <div class="field small">
         <label>Ano</label>
-        <input name="ano" value="{{ filters.ano }}" />
+        <input name="ano" value="{{ filters.ano }}" placeholder="2026" inputmode="numeric" />
       </div>
-      <div>
+
+      <div class="field medium">
         <label>Mês</label>
-        <select name="mes">
-          <option value="">Todos</option>
+        <select name="mes" data-filter-mes>
+          <option value="" data-default-label="Todos">Todos</option>
           {% for month in all_months %}
             <option value="{{ month.value }}" {% if filters.mes == month.value %}selected{% endif %}>{{ month.label }}</option>
           {% endfor %}
         </select>
       </div>
-      <div class="actions">
-        <button class="button secondary" type="button" onclick="window.print()">Imprimir</button>
-        <button class="button ghost" type="button" disabled>Exportar PDF (Em breve)</button>
+
+      <div class="field medium">
+        <label>Trimestre</label>
+        <select name="trimestre" data-filter-trimestre>
+          {% for quarter in quarter_options %}
+            <option value="{{ quarter.value }}" {% if filters.trimestre == quarter.value %}selected{% endif %}>{{ quarter.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="actions inline-actions inline-actions-filters">
+        <button class="button" type="submit">Aplicar filtros</button>
+        <button class="button secondary" type="submit" name="print_mode" value="1">Imprimir</button>
+      </div>
+
+      <div class="actions inline-actions inline-actions-right">
+        <a class="button ghost" href="/programming/current">Ver Programacao Atual</a>
+        <a class="button" href="/programming/new" title="Nova Oferta" aria-label="Nova Oferta">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;fill:currentColor">
+            <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+        </a>
       </div>
     </form>
   </div>
 </div>
-<table class="table">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Ano/Mês</th>
-      <th>Curso</th>
-      <th>Ambiente</th>
-      <th>Turno</th>
-      <th>Instrutor</th>
-      <th>Analista</th>
-      <th>Período</th>
-      <th>Horário</th>
-      <th>Dias</th>
-      <th>Turma</th>
-      <th>Ações</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for schedule in schedules %}
-    <tr>
-      <td>{{ schedule.id }}</td>
-      <td>{{ schedule.ano or "—" }}/{{ schedule.mes or "—" }}</td>
-      <td>{{ course_map[schedule.curso_id] if schedule.curso_id in course_map else schedule.curso_id or "—" }}</td>
-      <td>{{ room_map[schedule.sala_id] if schedule.sala_id in room_map else schedule.sala_id or "—" }}</td>
-      <td>{{ shift_map[schedule.turno_id] if schedule.turno_id in shift_map else schedule.turno_id or "—" }}</td>
-      <td>{{ instructor_map[schedule.instrutor_id] if schedule.instrutor_id in instructor_map else schedule.instrutor_id or "—" }}</td>
-      <td>{{ instructor_map[schedule.analista_id] if schedule.analista_id in instructor_map else schedule.analista_id or "—" }}</td>
-      <td>{{ schedule.data_inicio or "—" }} → {{ schedule.data_fim or "—" }}</td>
-      <td>{{ schedule.hora_inicio or "—" }} → {{ schedule.hora_fim or "—" }}</td>
-      <td>{{ schedule.dias_execucao | join(', ') if schedule.dias_execucao else "—" }}</td>
-      <td>{{ schedule.turma or "—" }}</td>
-      <td>
-        <div class="actions">
-          <a class="button secondary" href="/programming/{{ schedule.id }}/edit">Editar</a>
-          <form method="post" action="/programming/{{ schedule.id }}/delete">
-            <button class="button danger" type="submit">Excluir</button>
-          </form>
-        </div>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+<div class="no-print">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Ano/Mes</th>
+          <th>Curso</th>
+          <th>Ambiente</th>
+          <th>Turno</th>
+          <th>Instrutor</th>
+          <th>Analista</th>
+          <th>Periodo</th>
+          <th>Horario</th>
+          <th>Dias</th>
+          <th>Turma</th>
+          <th>Acoes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for schedule in schedules %}
+          <tr>
+            <td>{{ schedule.id }}</td>
+            <td>{{ schedule.ano or "-" }}/{{ schedule.mes or "-" }}</td>
+            <td>{{ course_map[schedule.curso_id] if schedule.curso_id in course_map else schedule.curso_id or "-" }}</td>
+            <td>{{ room_map[schedule.sala_id] if schedule.sala_id in room_map else schedule.sala_id or "-" }}</td>
+            <td>{{ shift_map[schedule.turno_id] if schedule.turno_id in shift_map else schedule.turno_id or "-" }}</td>
+            <td>{{ instructor_map[schedule.instrutor_id] if schedule.instrutor_id in instructor_map else schedule.instrutor_id or "-" }}</td>
+            <td>{{ instructor_map[schedule.analista_id] if schedule.analista_id in instructor_map else schedule.analista_id or "-" }}</td>
+            <td>{{ schedule.data_inicio or "-" }} -> {{ schedule.data_fim or "-" }}</td>
+            <td>{{ schedule.hora_inicio or "-" }} -> {{ schedule.hora_fim or "-" }}</td>
+            <td>{{ schedule.dias_execucao | join(", ") if schedule.dias_execucao else "-" }}</td>
+            <td>{{ schedule.turma or "-" }}</td>
+            <td>
+              <div class="actions actions-compact">
+                <a class="button btn-edit icon-btn" href="/programming/{{ schedule.id }}/edit" title="Editar" aria-label="Editar">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 000-1.42l-2.5-2.5a1.003 1.003 0 00-1.42 0l-1.83 1.83 3.75 3.75 2-1.66z"/>
+                  </svg>
+                </a>
+                <a class="button btn-pre icon-btn" href="/programming/{{ schedule.id }}/pre-chronogram?layout=portrait" title="Pré-cronograma" aria-label="Pré-cronograma">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 3h18v18H3V3zm2 2v3h14V5H5zm0 5v3h4v-3H5zm6 0v3h8v-3h-8zm-6 5v4h4v-4H5zm6 0v4h8v-4h-8z"/>
+                  </svg>
+                </a>
+                <form method="post" action="/programming/{{ schedule.id }}/delete">
+                  <button class="button btn-del icon-btn" type="submit" title="Excluir" aria-label="Excluir">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2h4v2H4V6h4l1-2z"/>
+                    </svg>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="print-only">
+  {% for group in report_month_groups %}
+    <section class="report-page">
+      <h2 class="report-title">PROGRAMACAO CEP PAPALEO - MES: {{ group.label|upper }}</h2>
+      <table class="table report-table">
+        <thead>
+          <tr>
+            <th>Turno</th>
+            <th>Pavimento</th>
+            <th>Ambiente</th>
+            <th>Capac.</th>
+            <th>Curso</th>
+            <th>Periodo</th>
+            <th>CH</th>
+            <th>Nº da turma</th>
+            <th>Horario</th>
+            <th>Analista</th>
+            <th>Assistente</th>
+            <th>Instrutor</th>
+            <th>Dia de aula</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group.rows %}
+            <tr>
+              <td>{{ row.turno }}</td>
+              <td>{{ row.pavimento }}</td>
+              <td>{{ row.ambiente }}</td>
+              <td>{{ row.qtd_alunos }}</td>
+              <td>{{ row.curso }}</td>
+              <td>{{ row.periodo }}</td>
+              <td>{{ row.ch }}</td>
+              <td>{{ row.turma }}</td>
+              <td>{{ row.horario }}</td>
+              <td>{{ row.analista }}</td>
+              <td>{{ row.assistente }}</td>
+              <td>{{ row.instrutor }}</td>
+              <td>{{ row.dias }}</td>
+            </tr>
+          {% endfor %}
+          {% if not group.rows %}
+            <tr>
+              <td colspan="13">Sem dados para este mes.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </section>
+  {% endfor %}
+</div>
+
+<style>
+  .filters-inline {
+    display: flex;
+    gap: 14px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .filters-inline .field { display: flex; flex-direction: column; gap: 6px; }
+  .filters-inline .field.small input { width: 110px; }
+  .filters-inline .field.medium select { width: 180px; }
+  .inline-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .inline-actions-filters { margin-top: 24px; }
+  .inline-actions-right { margin-left: auto; margin-top: 24px; }
+  .actions-compact { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .actions-compact form { margin: 0; }
+  .btn-edit { background: #e8f1ff; color: #0b3d91; border: 1px solid #bfd7ff; }
+  .btn-pre { background: #e9fbea; color: #1b5e20; border: 1px solid #bfe8c2; }
+  .btn-del { background: #ffe9e9; color: #8e0000; border: 1px solid #ffc4c4; }
+  .icon-btn { min-width: 36px; width: 36px; height: 36px; padding: 0; }
+  .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+  .print-only { display: none; }
+  .report-title {
+    margin: 0 0 10px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+  }
+  .report-table th,
+  .report-table td {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 10mm;
+    }
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    .report-page {
+      page-break-after: always;
+      break-after: page;
+    }
+    .report-page:last-of-type {
+      page-break-after: auto;
+      break-after: auto;
+    }
+  }
+</style>
+
+<script>
+  (function () {
+    const form = document.getElementById("report-filters-form");
+    if (!form) return;
+    const autoPrint = form.closest(".panel-grid")?.dataset.autoPrint === "1";
+    const mes = form.querySelector("[data-filter-mes]");
+    const trimestre = form.querySelector("[data-filter-trimestre]");
+    if (!mes || !trimestre) return;
+
+    const mesDefaultOption = mes.querySelector("option[value='']");
+    const trimestreDefaultOption = trimestre.querySelector("option[value='']");
+    const mesDefaultLabel = (mesDefaultOption && mesDefaultOption.dataset.defaultLabel) || "Todos";
+    const trimestreDefaultLabel = (trimestreDefaultOption && trimestreDefaultOption.textContent) || "Todos";
+
+    function applyPlaceholders(activeField) {
+      if (activeField === "mes") {
+        if (trimestreDefaultOption) trimestreDefaultOption.textContent = "--------";
+        if (mesDefaultOption) mesDefaultOption.textContent = mesDefaultLabel;
+        return;
+      }
+      if (activeField === "trimestre") {
+        if (mesDefaultOption) mesDefaultOption.textContent = "--------";
+        if (trimestreDefaultOption) trimestreDefaultOption.textContent = trimestreDefaultLabel;
+        return;
+      }
+      if (mesDefaultOption) mesDefaultOption.textContent = mesDefaultLabel;
+      if (trimestreDefaultOption) trimestreDefaultOption.textContent = trimestreDefaultLabel;
+    }
+
+    mes.addEventListener("change", () => {
+      if (mes.value) {
+        trimestre.value = "";
+        applyPlaceholders("mes");
+      } else if (trimestre.value) {
+        applyPlaceholders("trimestre");
+      } else {
+        applyPlaceholders("");
+      }
+    });
+
+    trimestre.addEventListener("change", () => {
+      if (trimestre.value) {
+        mes.value = "";
+        applyPlaceholders("trimestre");
+      } else if (mes.value) {
+        applyPlaceholders("mes");
+      } else {
+        applyPlaceholders("");
+      }
+    });
+
+    if (mes.value) applyPlaceholders("mes");
+    else if (trimestre.value) applyPlaceholders("trimestre");
+    else applyPlaceholders("");
+
+    if (autoPrint) {
+      window.addEventListener("load", () => window.print());
+    }
+  })();
+</script>
+
 {% endblock %}

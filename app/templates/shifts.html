@@ -9,9 +9,10 @@
     <tr>
       <th>ID</th>
       <th>Nomenclatura</th>
-      <th>Horário</th>
+      <th>Horario</th>
+      <th>Hs/Dia</th>
       <th>Status</th>
-      <th>Ações</th>
+      <th>Acoes</th>
     </tr>
   </thead>
   <tbody>
@@ -20,6 +21,7 @@
       <td>{{ shift.id }}</td>
       <td>{{ shift.nome }}</td>
       <td>{{ shift.horario_inicio }} - {{ shift.horario_fim }}</td>
+      <td>{{ shift.hs_dia or "-" }}</td>
       <td><span class="tag">{{ "Ativo" if shift.ativo else "Inativo" }}</span></td>
       <td>
         <div class="actions">

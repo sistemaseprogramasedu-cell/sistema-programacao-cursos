@@ -113,11 +113,34 @@
       </div>
       <div>
         <label>Instrutor</label>
-        <select name="instrutor_id" required>
-          {% for collaborator in instructors %}
-            <option value="{{ collaborator.id }}" {% if schedule and schedule.instrutor_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome_sobrenome }}</option>
-          {% endfor %}
-        </select>
+        {% set selected_instrutores = schedule.instrutor_ids if schedule and schedule.instrutor_ids else ([schedule.instrutor_id] if schedule and schedule.instrutor_id else []) %}
+        <div id="instructors-list" class="instructors-list" data-count="{{ selected_instrutores|length if selected_instrutores else 1 }}">
+          {% if selected_instrutores %}
+            {% for selected_id in selected_instrutores %}
+              <div class="instructor-row">
+                <select name="instrutor_ids" required>
+                  <option value="">Selecione</option>
+                  {% for collaborator in instructors %}
+                    <option value="{{ collaborator.id }}" {% if selected_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome_sobrenome }}</option>
+                  {% endfor %}
+                </select>
+                <button type="button" class="button ghost instructor-add">+</button>
+                <button type="button" class="button ghost instructor-remove">-</button>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="instructor-row">
+              <select name="instrutor_ids" required>
+                <option value="">Selecione</option>
+                {% for collaborator in instructors %}
+                  <option value="{{ collaborator.id }}">{{ collaborator.nome_sobrenome }}</option>
+                {% endfor %}
+              </select>
+              <button type="button" class="button ghost instructor-add">+</button>
+              <button type="button" class="button ghost instructor-remove">-</button>
+            </div>
+          {% endif %}
+        </div>
       </div>
     </div>
     <div class="form-row">
@@ -161,6 +184,56 @@
   const dataInicioInput = document.getElementById("data-inicio");
   const dataFimInput = document.getElementById("data-fim");
   const endDateAlert = document.getElementById("end-date-alert");
+  const instructorsList = document.getElementById("instructors-list");
+
+  function updateInstructorButtons() {
+    const rows = Array.from(instructorsList.querySelectorAll(".instructor-row"));
+    rows.forEach((row) => {
+      const removeBtn = row.querySelector(".instructor-remove");
+      if (!removeBtn) return;
+      removeBtn.disabled = rows.length <= 1;
+    });
+  }
+
+  function buildInstructorRow(selectedValue = "") {
+    const firstSelect = instructorsList.querySelector("select[name='instrutor_ids']");
+    const row = document.createElement("div");
+    row.className = "instructor-row";
+    row.innerHTML = `
+      <select name="instrutor_ids" required>${firstSelect ? firstSelect.innerHTML : ""}</select>
+      <button type="button" class="button ghost instructor-add">+</button>
+      <button type="button" class="button ghost instructor-remove">-</button>
+    `;
+    const select = row.querySelector("select[name='instrutor_ids']");
+    if (select && selectedValue) {
+      select.value = selectedValue;
+    }
+    return row;
+  }
+
+  function handleInstructorButtons(event) {
+    const addBtn = event.target.closest(".instructor-add");
+    const removeBtn = event.target.closest(".instructor-remove");
+    if (!addBtn && !removeBtn) return;
+
+    const row = event.target.closest(".instructor-row");
+    if (!row) return;
+
+    if (addBtn) {
+      const newRow = buildInstructorRow();
+      instructorsList.appendChild(newRow);
+      updateInstructorButtons();
+      return;
+    }
+
+    if (removeBtn) {
+      const rows = instructorsList.querySelectorAll(".instructor-row");
+      if (rows.length > 1) {
+        row.remove();
+      }
+      updateInstructorButtons();
+    }
+  }
 
   function atualizarAmbiente() {
     const option = ambienteSelect.selectedOptions[0];
@@ -378,5 +451,10 @@
   document.querySelectorAll("input[name='dias_execucao']").forEach((input) => {
     input.addEventListener("change", atualizarDataFinal);
   });
+
+  if (instructorsList) {
+    instructorsList.addEventListener("click", handleInstructorButtons);
+    updateInstructorButtons();
+  }
 </script>
 {% endblock %}

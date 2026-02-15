@@ -11,6 +11,10 @@
       <label>Nome</label>
       <input name="nome" value="{{ room.nome if room else '' }}" required />
     </div>
+    <div>
+      <label>Abreviação</label>
+      <input name="abreviacao" value="{{ room.abreviacao if room else '' }}" placeholder="Ex: LABFOT" />
+    </div>
   </div>
   <div class="form-row">
     <div>

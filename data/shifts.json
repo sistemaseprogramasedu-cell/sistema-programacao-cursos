@@ -1,5 +1,30 @@
 {
   "schema_version": "1.0",
-  "items": [],
+  "items": [
+    {
+      "id": "1",
+      "nome": "Manhã",
+      "horario_inicio": "08:00",
+      "horario_fim": "12:00",
+      "ativo": true,
+      "hs_dia": "04:00"
+    },
+    {
+      "id": "2",
+      "nome": "Tarde",
+      "horario_inicio": "14:00",
+      "horario_fim": "18:00",
+      "ativo": true,
+      "hs_dia": "04:00"
+    },
+    {
+      "id": "3",
+      "nome": "Noite",
+      "horario_inicio": "19:00",
+      "horario_fim": "22:00",
+      "ativo": true,
+      "hs_dia": "03:00"
+    }
+  ],
   "notes": "Turnos e horários disponíveis."
 }

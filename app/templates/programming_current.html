@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% set title = "Programacao Atual" %}
+{% block content %}
+
+<div class="panel">
+  <div class="panel-header">
+    <h3>Programacao Atual - {{ month_label }} / {{ year_value }}</h3>
+    <div class="actions">
+      <button class="button secondary" type="button" onclick="window.print()">Imprimir</button>
+      <a class="button ghost" href="/programming">Voltar</a>
+    </div>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Turno</th>
+          <th>Pavimento</th>
+          <th>Ambiente</th>
+          <th>Capac.</th>
+          <th>Curso</th>
+          <th>Periodo</th>
+          <th>CH</th>
+          <th>Nº da turma</th>
+          <th>Horario</th>
+          <th>Analista</th>
+          <th>Assistente</th>
+          <th>Instrutor</th>
+          <th>Dia de aula</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>{{ row.turno }}</td>
+            <td>{{ row.pavimento }}</td>
+            <td>{{ row.ambiente }}</td>
+            <td>{{ row.qtd_alunos }}</td>
+            <td>{{ row.curso }}</td>
+            <td>{{ row.periodo }}</td>
+            <td>{{ row.ch }}</td>
+            <td>{{ row.turma }}</td>
+            <td>{{ row.horario }}</td>
+            <td>{{ row.analista }}</td>
+            <td>{{ row.assistente }}</td>
+            <td>{{ row.instrutor }}</td>
+            <td>{{ row.dias }}</td>
+          </tr>
+        {% endfor %}
+        {% if not rows %}
+          <tr>
+            <td colspan="13">Sem programação para o mês em vigor.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 10mm;
+    }
+    .sidebar,
+    .topbar,
+    .flash-area,
+    .panel-header .actions {
+      display: none !important;
+    }
+    .content {
+      padding: 0 !important;
+    }
+  }
+</style>
+
+{% endblock %}

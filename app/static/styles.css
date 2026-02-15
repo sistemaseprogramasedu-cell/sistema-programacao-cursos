@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
 :root {
   color-scheme: light;
   --bg: #d6e4eb;
@@ -238,6 +240,18 @@ body {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.instructors-list {
+  display: grid;
+  gap: 8px;
+}
+
+.instructor-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
 }
 
 .frame {
@@ -483,4 +497,901 @@ body {
   border-color: #fca5a5;
   color: #991b1b;
   font-weight: 600;
+}
+.brand {
+  padding: 20px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-text {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+
+  background: linear-gradient(90deg, #ffffff, #cfe7ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand-text{
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+.brand-text {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: 1px;
+  color: white;
+}
+/* =========================================
+   SIDEBAR 2.0 (FLOW) — cola no FINAL do CSS
+   ========================================= */
+
+.sidebar {
+  width: 260px; /* um pouco mais largo pra respirar */
+  padding: 20px 16px;
+  gap: 16px;
+}
+
+.brand {
+  padding: 14px 12px 10px;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  margin-bottom: 6px;
+}
+
+.brand-text {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  line-height: 1;
+
+  /* glow/gradient discreto */
+  background: linear-gradient(90deg, #ffffff, #cfe7ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-subtitle {
+  font-size: 12px;
+  color: rgba(255,255,255,0.72);
+  letter-spacing: 0.3px;
+}
+
+/* novo container do menu */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* blocos por seção */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* título de seção (Menu) */
+.nav-section {
+  margin: 0;
+  padding: 10px 10px 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: rgba(255,255,255,0.70);
+}
+
+/* links com layout moderno e alinhado */
+.nav-link {
+  display: flex;                 /* antes era block */
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 0;                     /* remove margin-bottom antigo */
+  color: rgba(255,255,255,0.95);
+  text-decoration: none;
+  position: relative;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.nav-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.10);
+  font-size: 14px;
+  flex: 0 0 26px;
+}
+
+.nav-text {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+/* hover e active bem claros */
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateX(2px);
+}
+
+.nav-link.active {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16);
+}
+
+/* CTA (Criar Programação) */
+.nav-link.nav-primary {
+  background: rgba(37, 99, 235, 0.40);
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.35);
+}
+
+.nav-link.nav-primary:hover {
+  background: rgba(37, 99, 235, 0.52);
+}
+
+/* rodapé */
+.nav-footer {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  justify-content: center;
+}
+
+.nav-footer-pill {
+  font-size: 12px;
+  color: rgba(255,255,255,0.82);
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.14);
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+/* divisores elegantes na sidebar */
+.nav-divider {
+  height: 1px;
+  margin: 10px 6px;
+  background: rgba(255,255,255,0.14);
+}
+
+/* ícones mais “corporate”: remove cara de botão infantil */
+.nav-icon {
+  background: rgba(255,255,255,0.06); /* mais discreto */
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.nav-icon svg {
+  opacity: 0.92;
+}
+/* =========================================
+   PADRÃO GLOBAL — INPUTS / SELECTS / TEXTAREA
+   cola no FINAL do styles.css
+   ========================================= */
+
+:root{
+  --field-bg: #ffffff;
+  --field-text: #0f172a;
+  --field-border: #cbd5e1;
+  --field-border-focus: #93c5fd;
+  --field-shadow-focus: rgba(37, 99, 235, 0.18);
+  --field-radius: 10px;
+  --field-height: 42px;
+}
+
+/* garante padrão em QUALQUER lugar, não só dentro de .form */
+input[type="text"],
+input:not([type]),
+input[type="number"],
+input[type="email"],
+input[type="tel"],
+input[type="date"],
+input[type="time"],
+input[type="password"],
+select,
+textarea{
+  width: 100%;
+  background: var(--field-bg);
+  color: var(--field-text);
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.2;
+  text-align: left;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+/* altura padronizada */
+select,
+input:not(textarea){
+  min-height: var(--field-height);
+}
+
+/* foco padrão */
+input:focus,
+select:focus,
+textarea:focus{
+  outline: none;
+  border-color: var(--field-border-focus);
+  box-shadow: 0 0 0 4px var(--field-shadow-focus);
+}
+
+/* remove estilo feio do navegador */
+select{
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #475569 50%),
+    linear-gradient(135deg, #475569 50%, transparent 50%),
+    linear-gradient(to right, transparent, transparent);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 12px) 50%,
+    100% 0;
+  background-size: 6px 6px, 6px 6px, 2.5em 2.5em;
+  background-repeat: no-repeat;
+  padding-right: 42px; /* espaço do "arrow" */
+}
+
+/* textarea com altura mais confortável */
+textarea{
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* alinhamento perfeito em grid/linhas */
+.form-row > * {
+  align-self: start;
+}
+/* FIX: nav-primary sem borda/destoante */
+.nav-link.nav-primary {
+  box-shadow: none !important;
+  border: none !important;
+  background: rgba(255, 255, 255, 0.12) !important; /* padrão elegante */
+}
+
+.nav-link.nav-primary:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+}
+/* FIX: padronizar filtros (Cronogramas / Programação / Relatórios) */
+.filters select,
+.filters input,
+.filters textarea {
+  border-radius: var(--field-radius) !important;
+  min-height: var(--field-height) !important;
+  appearance: none;
+}
+
+/* tira setinhas feias do number (ano) no Chrome/Edge */
+.filters input[type="number"]::-webkit-outer-spin-button,
+.filters input[type="number"]::-webkit-inner-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+}
+.filters input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+/* Botão compacto para áreas de filtro/relatório */
+.button.compact {
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 10px;
+  gap: 6px;
+}
+/* ===========================
+   SIDEBAR – PADRONIZAÇÃO FINAL
+   =========================== */
+
+/* Remove qualquer borda, sombra ou outline inesperado */
+.sidebar .nav-link {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+}
+
+/* Hover elegante e consistente */
+.sidebar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Estado ativo (página atual) */
+.sidebar .nav-link.active,
+.sidebar .nav-link[aria-current="page"] {
+  background: rgba(255, 255, 255, 0.18);
+  font-weight: 600;
+}
+
+/* Garante que nenhum link “especial” fique diferente */
+.sidebar .nav-link:first-child,
+.sidebar .nav-link:last-child {
+  border: none !important;
+  box-shadow: none !important;
+}
+/* ===============================
+   SIDEBAR – CORREÇÃO DO SOMBREADO
+   =============================== */
+
+/* Base: todos os links iguais */
+.sidebar .nav-link {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Hover sutil */
+.sidebar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Item ativo: SEM caixa, SEM sombra */
+.sidebar .nav-link.active,
+.sidebar .nav-link[aria-current="page"] {
+  background: transparent !important;
+  box-shadow: none !important;
+  font-weight: 600;
+  position: relative;
+}
+
+/* Indicador elegante (linha lateral) */
+.sidebar .nav-link.active::before,
+.sidebar .nav-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 60%;
+  border-radius: 4px;
+  background: #cfe7ff;
+}
+/* =========================
+   PRÉ-CRONOGRAMA
+========================= */
+
+.print-page {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+.chrono-sheet {
+  width: 100%;
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.chrono-landscape {
+  max-width: 1400px;
+}
+
+.chrono-portrait {
+  max-width: 1000px;
+}
+
+.chrono-top-actions {
+  margin-bottom: 15px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chrono-header-top {
+  border-bottom: 2px solid #ddd;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.senac-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.senac-logo-img img {
+  height: 50px;
+}
+
+.senac-line1 {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.senac-line2 {
+  font-size: 12px;
+  color: #555;
+}
+
+.chrono-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 20px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.info-grid span {
+  font-weight: bold;
+}
+
+/* ======= GRADE ======= */
+
+.month-frame {
+  margin-top: 25px;
+}
+
+.month-bar {
+  font-weight: bold;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.chrono-block {
+  display: grid;
+  grid-template-columns: 80px repeat(var(--cols), 1fr);
+  border: 1px solid #ccc;
+  font-size: 12px;
+}
+
+.chrono-header,
+.chrono-row {
+  display: contents;
+}
+
+.hcell,
+.tcell {
+  border: 1px solid #ccc;
+  padding: 4px;
+  text-align: center;
+}
+
+.time-col {
+  background: #f3f3f3;
+  font-weight: bold;
+}
+
+.uc-cell {
+  min-height: 22px;
+}
+
+.uc-pi {
+  background: #eaeaea;
+  font-weight: bold;
+}
+
+/* ======= RESUMO UCs ======= */
+
+.uc-frame {
+  margin-top: 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.uc-frame-head {
+  background: #f5f5f5;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.uc-table {
+  font-size: 12px;
+}
+
+.uc-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 70px;
+  padding: 4px 10px;
+  align-items: center;
+}
+
+.uc-head {
+  background: #eee;
+  font-weight: bold;
+}
+
+.uc-zebra {
+  background: #fafafa;
+}
+
+.uc-right {
+  text-align: right;
+}
+
+.uc-badge {
+  background: #0072c6;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.uc-pi-row .uc-badge {
+  background: #666;
+}
+
+/* ======= IMPRESSÃO ======= */
+
+@media print {
+  .chrono-top-actions {
+    display: none;
+  }
+
+  body {
+    background: white;
+  }
+
+  .chrono-sheet {
+    box-shadow: none;
+    padding: 0;
+  }
+}
+/* ===========================
+   PRÉ-CRONOGRAMA (FLOW)
+   =========================== */
+
+.print-page{
+  padding: 14px;
+}
+
+.chrono-sheet{
+  background: #fff;
+  border: 1px solid rgba(15,23,42,.10);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 10px 22px rgba(15,23,42,.08);
+}
+
+/* ações do topo */
+.chrono-top-actions{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* layout portrait/landscape */
+.chrono-portrait{ max-width: 980px; margin: 0 auto; }
+.chrono-landscape{ max-width: 1200px; margin: 0 auto; }
+
+.chrono-header-top{
+  border: 1px solid rgba(15,23,42,.10);
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(248,250,252,.9), rgba(255,255,255,1));
+  margin-bottom: 12px;
+}
+
+/* bloco SENAC */
+.senac-block{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.senac-logo-img{
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: #fff;
+  overflow: hidden;
+}
+
+.senac-logo-img img{
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+}
+
+.senac-text{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.senac-line1{
+  font-weight: 800;
+  letter-spacing: .2px;
+  font-size: 12px;
+  color: #0f172a;
+  text-transform: uppercase;
+}
+
+.senac-line2{
+  font-weight: 600;
+  font-size: 12px;
+  color: rgba(15,23,42,.75);
+}
+
+.chrono-title{
+  margin-top: 10px;
+  font-weight: 900;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+/* grid de infos */
+.info-grid{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 6px 12px;
+  font-size: 12px;
+  color: rgba(15,23,42,.85);
+}
+
+.info-grid span{
+  font-weight: 800;
+  color: rgba(15,23,42,.9);
+}
+
+/* mês */
+.month-frame{
+  margin-top: 12px;
+  border: 1px solid rgba(15,23,42,.10);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.month-bar{
+  padding: 10px 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  background: #0f172a;
+  color: #fff;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.month-main{
+  font-size: 13px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.month-sub{
+  opacity: .85;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* grade do cronograma */
+.chrono-block{
+  --cols: 10;
+  --time-col: 72px;
+  display: block;
+  grid-template-columns: none;
+  padding: 8px;
+  overflow-x: hidden;
+}
+
+.chrono-header{
+  display: grid;
+  grid-template-columns: var(--time-col) repeat(var(--cols), minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 4px;
+  width: 100%;
+}
+
+.chrono-row{
+  display: grid;
+  grid-template-columns: var(--time-col) repeat(var(--cols), minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 4px;
+  width: 100%;
+}
+
+.hcell{
+  border: 1px solid rgba(15,23,42,.12);
+  border-radius: 8px;
+  padding: 4px 2px;
+  text-align: center;
+  background: rgba(248,250,252,.95);
+  overflow: hidden;
+  line-height: 1.15;
+}
+
+.hcell .dow{
+  font-weight: 900;
+  font-size: 9px;
+  letter-spacing: .3px;
+  color: rgba(15,23,42,.9);
+}
+
+.hcell .dom{
+  font-weight: 800;
+  font-size: 11px;
+  color: #0f172a;
+}
+
+.time-col{
+  text-align: center;
+  font-weight: 900;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
+
+.tcell{
+  border: 1px solid rgba(15,23,42,.12);
+  border-radius: 8px;
+  padding: 5px 2px;
+  background: #fff;
+  text-align: center;
+  font-size: 10px;
+  color: rgba(15,23,42,.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* linha instrutor */
+.instr-row .tcell{
+  background: rgba(241,245,249,.7);
+}
+.instr-row .instr{
+  font-size: 11px;
+  font-weight: 900;
+}
+
+/* PI destaque */
+.uc-cell.uc-pi{
+  background: rgba(16,185,129,.12);
+  border-color: rgba(16,185,129,.35);
+  font-weight: 900;
+  color: rgba(15,23,42,.95);
+}
+
+@media (max-width: 980px){
+  .info-grid{
+    grid-template-columns: repeat(2, minmax(200px, 1fr));
+  }
+}
+
+/* compacto */
+.chrono-compact .hcell,
+.chrono-compact .tcell{
+  padding: 5px 4px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+.chrono-compact .chrono-header{
+  grid-template-columns: 64px repeat(var(--cols), minmax(0, 1fr));
+}
+.chrono-compact .chrono-row{
+  grid-template-columns: 64px repeat(var(--cols), minmax(0, 1fr));
+}
+
+/* quadro resumo UCs */
+.uc-frame{
+  margin: 10px;
+  border: 1px solid rgba(15,23,42,.12);
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(248,250,252,.85), rgba(255,255,255,1));
+}
+
+.uc-frame-head{
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(15,23,42,.10);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.uc-frame-title{
+  font-weight: 900;
+  letter-spacing: .2px;
+  color: #0f172a;
+}
+
+.uc-frame-sub{
+  font-size: 12px;
+  color: rgba(15,23,42,.65);
+  font-weight: 600;
+}
+
+.uc-table{
+  padding: 8px 10px 12px;
+}
+
+.uc-row{
+  display: grid;
+  grid-template-columns: 70px 1fr 90px;
+  gap: 10px;
+  padding: 8px 8px;
+  border-radius: 10px;
+  align-items: center;
+}
+
+.uc-head{
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: rgba(15,23,42,.75);
+  padding-top: 4px;
+  padding-bottom: 6px;
+}
+
+.uc-zebra{
+  background: rgba(15,23,42,.04);
+}
+
+.uc-badge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 11px;
+  background: rgba(59,130,246,.12);
+  color: rgba(30,64,175,.95);
+  border: 1px solid rgba(59,130,246,.28);
+}
+
+.uc-pi-row .uc-badge{
+  background: rgba(16,185,129,.14);
+  color: rgba(6,95,70,.95);
+  border-color: rgba(16,185,129,.30);
+}
+
+.uc-name{
+  font-weight: 700;
+  color: rgba(15,23,42,.88);
+}
+
+.uc-right{
+  text-align: right;
+  font-weight: 900;
+  color: rgba(15,23,42,.85);
+}
+
+/* impressão: esconde botões e remove sombras */
+@media print{
+  .sidebar, .topbar, .chrono-top-actions, .flash-area { display:none !important; }
+  .content{ padding: 0 !important; }
+  .page{ padding: 0 !important; }
+
+  .chrono-sheet{
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  .month-frame{ page-break-inside: avoid; }
 }

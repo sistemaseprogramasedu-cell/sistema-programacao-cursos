@@ -1,5 +1,30 @@
 {
   "schema_version": "1.0",
-  "items": [],
+  "items": [
+    {
+      "id": "UC-001",
+      "curso_id": "1",
+      "nome": "ALGORÍTMO",
+      "carga_horaria": 50.0
+    },
+    {
+      "id": "UC-002",
+      "curso_id": "1",
+      "nome": "LÓGICA DE PROGRAMAÇÃO",
+      "carga_horaria": 50.0
+    },
+    {
+      "id": "UC-003",
+      "curso_id": "1",
+      "nome": "PYTHON",
+      "carga_horaria": 50.0
+    },
+    {
+      "id": "UC-004",
+      "curso_id": "1",
+      "nome": "PROJETO INTEGRADOR",
+      "carga_horaria": 50.0
+    }
+  ],
   "notes": "Unidades curriculares vinculadas a cursos."
 }

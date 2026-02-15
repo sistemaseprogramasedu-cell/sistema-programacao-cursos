@@ -3,6 +3,10 @@
 {% block content %}
 <form class="filters" method="get">
   <div>
+    <label>ID PRÉ</label>
+    <input name="id" value="{{ filters.id if filters.id is defined else '' }}" />
+  </div>
+  <div>
     <label>Ano</label>
     <input name="ano" value="{{ filters.ano }}" />
   </div>
@@ -51,9 +55,9 @@
       {% endfor %}
     </select>
   </div>
-  <div class="actions">
-    <button class="button" type="submit">Filtrar</button>
-    <a class="button ghost" href="/chronograms">Limpar</a>
+  <div class="actions chrono-actions">
+    <button class="button chrono-btn" type="submit">Filtrar</button>
+    <a class="button ghost chrono-btn" href="/chronograms">Limpar</a>
   </div>
 </form>
 <table class="table">
@@ -79,4 +83,26 @@
     </tr>
   </tbody>
 </table>
+
+<style>
+  .chrono-btn {
+    min-width: 92px;
+    height: 34px;
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 8px;
+    line-height: 1;
+  }
+
+  .filters .actions {
+    align-items: end;
+    gap: 8px;
+  }
+
+  .chrono-actions {
+    flex-direction: column;
+    align-items: stretch !important;
+    justify-content: flex-end;
+  }
+</style>
 {% endblock %}

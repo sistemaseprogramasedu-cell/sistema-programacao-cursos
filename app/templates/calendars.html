@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% set title = "Calendários" %}
+{% set title = "Calendarios" %}
 {% block content %}
 <div class="actions">
-  <a class="button" href="/calendars/new">Novo calendário</a>
+  <a class="button" href="/calendars/new">Novo Calendario Letivo</a>
 </div>
 <table class="table">
   <thead>
@@ -12,7 +12,7 @@
       <th>Dias letivos</th>
       <th>Feriados</th>
       <th>Status</th>
-      <th>Ações</th>
+      <th>Acoes</th>
     </tr>
   </thead>
   <tbody>
@@ -34,7 +34,7 @@
       <td>
         <div class="actions">
           <a class="button secondary" href="/calendars/{{ calendar.ano }}/edit">Editar</a>
-          <a class="button ghost" href="/calendars/{{ calendar.ano }}/calendar-view">Modo Calendário</a>
+          <a class="button ghost" href="/calendars/{{ calendar.ano }}/calendar-view">Modo Calendario</a>
           <form method="post" action="/calendars/{{ calendar.ano }}/delete">
             <button class="button danger" type="submit">Excluir</button>
           </form>

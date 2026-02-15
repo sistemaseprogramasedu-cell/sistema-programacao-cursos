@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import date, datetime, time
 from typing import Any, Dict, List
@@ -51,6 +51,7 @@ def create_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
     items = load_items(FILENAME)
     if not payload.get("id"):
         payload["id"] = next_numeric_id(items)
+    _normalize_instructors(payload)
     _normalize_dates(payload)
     require_fields(payload, REQUIRED_FIELDS)
     ensure_unique_id(items, payload["id"])
@@ -65,8 +66,9 @@ def update_schedule(schedule_id: str, updates: Dict[str, Any]) -> Dict[str, Any]
     items = load_items(FILENAME)
     schedule = find_item(items, schedule_id)
     if not schedule:
-        raise ValidationError(f"Programação não encontrada: {schedule_id}")
+        raise ValidationError(f"ProgramaÃ§Ã£o nÃ£o encontrada: {schedule_id}")
     schedule.update(updates)
+    _normalize_instructors(schedule)
     _normalize_dates(schedule)
     require_fields(schedule, REQUIRED_FIELDS)
     _validate_references(schedule)
@@ -80,14 +82,15 @@ def delete_schedule(schedule_id: str) -> None:
     items = load_items(FILENAME)
     schedule = find_item(items, schedule_id)
     if not schedule:
-        raise ValidationError(f"Programação não encontrada: {schedule_id}")
+        raise ValidationError(f"ProgramaÃ§Ã£o nÃ£o encontrada: {schedule_id}")
     items.remove(schedule)
     save_items(FILENAME, items)
 
 
 def _validate_references(payload: Dict[str, Any]) -> None:
     _ensure_exists(COURSES_FILE, payload["curso_id"], "Curso")
-    _ensure_instructor(payload["instrutor_id"], "Instrutor")
+    for instructor_id in _get_instructor_ids(payload):
+        _ensure_instructor(instructor_id, "Instrutor")
     _ensure_instructor(payload["analista_id"], "Analista")
     _ensure_exists(ROOMS_FILE, payload["sala_id"], "Ambiente")
     _ensure_exists(SHIFTS_FILE, payload["turno_id"], "Turno")
@@ -96,23 +99,23 @@ def _validate_references(payload: Dict[str, Any]) -> None:
 def _ensure_exists(filename: str, item_id: str, label: str) -> None:
     items = load_items(filename)
     if not find_item(items, item_id):
-        raise ValidationError(f"{label} não encontrado: {item_id}")
+        raise ValidationError(f"{label} nÃ£o encontrado: {item_id}")
 
 
 def _ensure_instructor(instructor_id: str, role: str) -> None:
     items = load_items(INSTRUCTORS_FILE)
     instructor = find_item(items, instructor_id)
     if not instructor:
-        raise ValidationError(f"Colaborador não encontrado: {instructor_id}")
+        raise ValidationError(f"Colaborador nÃ£o encontrado: {instructor_id}")
     if instructor.get("role") != role:
-        raise ValidationError(f"Colaborador informado não é da categoria {role}.")
+        raise ValidationError(f"Colaborador informado nÃ£o Ã© da categoria {role}.")
 
 
 def _parse_date(raw: str) -> date:
     try:
         return datetime.strptime(raw, "%d/%m/%Y").date()
     except ValueError as exc:
-        raise ValidationError(f"Data inválida: {raw}") from exc
+        raise ValidationError(f"Data invÃ¡lida: {raw}") from exc
 
 
 def _normalize_dates(payload: Dict[str, Any]) -> None:
@@ -120,11 +123,45 @@ def _normalize_dates(payload: Dict[str, Any]) -> None:
     payload["data_fim"] = _parse_date(payload["data_fim"]).strftime("%d/%m/%Y")
 
 
+def _normalize_instructors(payload: Dict[str, Any]) -> None:
+    raw_ids = payload.get("instrutor_ids") or []
+    if isinstance(raw_ids, str):
+        raw_ids = [raw_ids]
+
+    cleaned: List[str] = []
+    if isinstance(raw_ids, list):
+        for value in raw_ids:
+            instructor_id = str(value or "").strip()
+            if instructor_id and instructor_id not in cleaned:
+                cleaned.append(instructor_id)
+
+    primary = str(payload.get("instrutor_id") or "").strip()
+    if primary and primary not in cleaned:
+        cleaned.insert(0, primary)
+
+    if cleaned:
+        payload["instrutor_ids"] = cleaned
+        payload["instrutor_id"] = cleaned[0]
+
+
+def _get_instructor_ids(payload: Dict[str, Any]) -> List[str]:
+    raw_ids = payload.get("instrutor_ids") or []
+    if isinstance(raw_ids, str):
+        raw_ids = [raw_ids]
+
+    cleaned = [str(value).strip() for value in raw_ids if str(value).strip()]
+    if cleaned:
+        return cleaned
+
+    primary = str(payload.get("instrutor_id") or "").strip()
+    return [primary] if primary else []
+
+
 def _parse_time(raw: str) -> time:
     try:
         return datetime.strptime(raw, "%H:%M").time()
     except ValueError as exc:
-        raise ValidationError(f"Horário inválido: {raw}") from exc
+        raise ValidationError(f"HorÃ¡rio invÃ¡lido: {raw}") from exc
 
 
 def _date_ranges_overlap(start_a: date, end_a: date, start_b: date, end_b: date) -> bool:
@@ -139,11 +176,12 @@ def _validate_conflicts(existing: List[Dict[str, Any]], payload: Dict[str, Any])
     start = _parse_date(payload["data_inicio"])
     end = _parse_date(payload["data_fim"])
     if start > end:
-        raise ValidationError("Data início não pode ser maior que data fim.")
+        raise ValidationError("Data inicio nao pode ser maior que data fim.")
     _validate_dates_and_times(payload)
     _validate_instructor_workload(existing, payload)
 
     payload_days = set(payload.get("dias_execucao") or [])
+    payload_instructors = set(_get_instructor_ids(payload))
     start_time = _parse_time(payload["hora_inicio"])
     end_time = _parse_time(payload["hora_fim"])
 
@@ -169,9 +207,11 @@ def _validate_conflicts(existing: List[Dict[str, Any]], payload: Dict[str, Any])
                 continue
 
         if item.get("sala_id") == payload["sala_id"]:
-            raise ValidationError("Conflito de ambiente: horário já reservado.")
-        if item.get("instrutor_id") == payload["instrutor_id"]:
-            raise ValidationError("Conflito de instrutor: horário já reservado.")
+            raise ValidationError("Conflito de ambiente: horario ja reservado.")
+
+        item_instructors = set(_get_instructor_ids(item))
+        if payload_instructors.intersection(item_instructors):
+            raise ValidationError("Conflito de instrutor: horario ja reservado.")
 
 
 def _validate_instructor_workload(
@@ -179,29 +219,30 @@ def _validate_instructor_workload(
     payload: Dict[str, Any],
 ) -> None:
     instructors = load_items(INSTRUCTORS_FILE)
-    instructor = find_item(instructors, payload["instrutor_id"])
-    if not instructor:
-        raise ValidationError(f"Colaborador não encontrado: {payload['instrutor_id']}")
-    limit = instructor.get("max_horas_semana")
-    if limit is None:
-        return
-
     duration_hours = _duration_hours(payload["hora_inicio"], payload["hora_fim"])
     weekly_hours = duration_hours * len(payload.get("dias_execucao") or [])
 
-    total = weekly_hours
-    for item in existing:
-        if item.get("instrutor_id") != payload["instrutor_id"]:
+    for instructor_id in _get_instructor_ids(payload):
+        instructor = find_item(instructors, instructor_id)
+        if not instructor:
+            raise ValidationError(f"Colaborador nao encontrado: {instructor_id}")
+        limit = instructor.get("max_horas_semana")
+        if limit is None:
             continue
-        if item.get("hora_inicio") and item.get("hora_fim"):
-            total += _duration_hours(item["hora_inicio"], item["hora_fim"]) * len(
-                item.get("dias_execucao") or []
-            )
 
-    if total > float(limit):
-        raise ValidationError(
-            "Limite de carga horária semanal excedido para o colaborador."
-        )
+        total = weekly_hours
+        for item in existing:
+            if instructor_id not in _get_instructor_ids(item):
+                continue
+            if item.get("hora_inicio") and item.get("hora_fim"):
+                total += _duration_hours(item["hora_inicio"], item["hora_fim"]) * len(
+                    item.get("dias_execucao") or []
+                )
+
+        if total > float(limit):
+            raise ValidationError(
+                "Limite de carga horaria semanal excedido para o colaborador."
+            )
 
 
 def _duration_hours(start_raw: str, end_raw: str) -> float:
@@ -210,7 +251,7 @@ def _duration_hours(start_raw: str, end_raw: str) -> float:
     start_minutes = start_time.hour * 60 + start_time.minute
     end_minutes = end_time.hour * 60 + end_time.minute
     if end_minutes <= start_minutes:
-        raise ValidationError("Horário final deve ser maior que o inicial.")
+        raise ValidationError("HorÃ¡rio final deve ser maior que o inicial.")
     return (end_minutes - start_minutes) / 60
 
 
@@ -218,12 +259,13 @@ def _validate_dates_and_times(payload: Dict[str, Any]) -> None:
     _parse_date(payload["data_inicio"])
     _parse_date(payload["data_fim"])
     if not payload.get("dias_execucao"):
-        raise ValidationError("Dias de execução são obrigatórios.")
+        raise ValidationError("Dias de execuÃ§Ã£o sÃ£o obrigatÃ³rios.")
     _duration_hours(payload["hora_inicio"], payload["hora_fim"])
     turma = payload.get("turma", "")
     if not turma:
-        raise ValidationError("Número da turma é obrigatório.")
+        raise ValidationError("NÃºmero da turma Ã© obrigatÃ³rio.")
     import re
 
     if not re.fullmatch(r"\d{4}\.\d{2}\.\d{3}", turma):
-        raise ValidationError("Número da turma inválido. Formato esperado: 0000.00.000.")
+        raise ValidationError("NÃºmero da turma invÃ¡lido. Formato esperado: 0000.00.000.")
+

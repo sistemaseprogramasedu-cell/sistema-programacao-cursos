@@ -1,5 +1,50 @@
 {
   "schema_version": "1.0",
-  "items": [],
+  "items": [
+    {
+      "id": "1",
+      "nome": "LOHANNA SILVA BARROSO",
+      "nome_sobrenome": "LOHANNA BARROSO",
+      "email": "lohanna.barroso@pa.senac.br",
+      "telefone": "(91) 65654-6565",
+      "role": "Analista",
+      "especialidades": [],
+      "max_horas_semana": null,
+      "ativo": true
+    },
+    {
+      "id": "2",
+      "nome": "ENOQUE",
+      "nome_sobrenome": "ENOQUE",
+      "email": "enoque.lima@pa.senac.br",
+      "telefone": "(91) 98765-0695",
+      "role": "Assistente",
+      "especialidades": [],
+      "max_horas_semana": null,
+      "ativo": true
+    },
+    {
+      "id": "3",
+      "nome": "DIEGO DOS ANJOS FARIAS",
+      "nome_sobrenome": "DIEGO FARIAS",
+      "email": "dlkfsdlfs@kdjfsdjf",
+      "telefone": "(54) 65451-2316",
+      "role": "Instrutor",
+      "especialidades": [],
+      "max_horas_semana": null,
+      "ativo": true
+    },
+    {
+      "id": "4",
+      "nome": "FELIPE MONTEIRO BRITO",
+      "nome_sobrenome": "FELIPE BRITO",
+      "email": "felipemc20fmc@gmail.com",
+      "telefone": "(65) 46545-4564",
+      "role": "Instrutor",
+      "especialidades": [],
+      "max_horas_semana": null,
+      "ativo": true
+    }
+  ],
   "notes": "Colaboradores cadastrados no sistema."
 }

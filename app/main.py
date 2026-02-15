@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import calendar as calendar_module
 import json
@@ -49,7 +49,7 @@ from src.storage import ValidationError, next_numeric_id
 MONTHS = [
     {"value": "1", "label": "Janeiro"},
     {"value": "2", "label": "Fevereiro"},
-    {"value": "3", "label": "Março"},
+    {"value": "3", "label": "Mar\u00e7o"},
     {"value": "4", "label": "Abril"},
     {"value": "5", "label": "Maio"},
     {"value": "6", "label": "Junho"},
@@ -104,6 +104,17 @@ def _parse_int(value: Optional[str]) -> Optional[int]:
 
 def _parse_days(value: str) -> List[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _normalize_instructor_ids(instrutor_ids: List[str], fallback_instrutor_id: str = "") -> List[str]:
+    cleaned: List[str] = []
+    for iid in instrutor_ids or []:
+        value = (iid or "").strip()
+        if value and value not in cleaned:
+            cleaned.append(value)
+    if not cleaned and (fallback_instrutor_id or "").strip():
+        cleaned.append((fallback_instrutor_id or "").strip())
+    return cleaned
 
 
 def _parse_json(text: str, default: Any) -> Any:
@@ -198,33 +209,33 @@ def _calculate_end_date(
     calendario: Dict[str, Any],
 ) -> tuple[Optional[date], Optional[str]]:
     if not calendario:
-        return None, "Calendário não encontrado para o ano informado."
+        return None, "CalendÃ¡rio nÃ£o encontrado para o ano informado."
     if not start_date_raw:
         return None, "Informe a data inicial."
     if not days_execucao:
-        return None, "Selecione ao menos um dia de execução."
+        return None, "Selecione ao menos um dia de execuÃ§Ã£o."
     if ch_total <= 0 or hs_dia <= 0:
-        return None, "Carga horária e horas/dia devem ser maiores que zero."
+        return None, "Carga horÃ¡ria e horas/dia devem ser maiores que zero."
 
     try:
         start_date = datetime.strptime(start_date_raw, "%d/%m/%Y").date()
     except ValueError:
-        return None, "Data inicial inválida."
+        return None, "Data inicial invÃ¡lida."
 
     if start_date.year != year:
         return None, "Ano e data inicial precisam estar no mesmo ano."
 
-    weekday_map = {"SEG": 0, "TER": 1, "QUA": 2, "QUI": 3, "SEX": 4, "SÁB": 5, "SAB": 5}
+    weekday_map = {"SEG": 0, "TER": 1, "QUA": 2, "QUI": 3, "SEX": 4, "SÃB": 5, "SAB": 5}
     selected_weekdays = {weekday_map[day] for day in days_execucao if day in weekday_map}
     if not selected_weekdays:
-        return None, "Dias de execução inválidos."
+        return None, "Dias de execuÃ§Ã£o invÃ¡lidos."
 
     dias_letivos = calendario.get("dias_letivos_por_mes", [[] for _ in range(12)])
     month_sets = [set(_sanitize_days_list(days)) for days in dias_letivos]
 
     total_days_needed = int(math.ceil(ch_total / hs_dia))
     if total_days_needed <= 0:
-        return None, "Não foi possível calcular o total de dias."
+        return None, "NÃ£o foi possÃ­vel calcular o total de dias."
 
     current = start_date
     counted = 0
@@ -237,7 +248,7 @@ def _calculate_end_date(
                     return current, None
         current += timedelta(days=1)
 
-    return None, "Não há dias letivos suficientes no calendário para o período informado."
+    return None, "NÃ£o hÃ¡ dias letivos suficientes no calendÃ¡rio para o perÃ­odo informado."
 
 
 def _build_month_grid(year: int, month: int) -> List[List[Optional[int]]]:
@@ -265,6 +276,146 @@ def _build_month_grid(year: int, month: int) -> List[List[Optional[int]]]:
         weeks.append(week)
     return weeks
 
+def _chunk_list(items: List[Any], size: int) -> List[List[Any]]:
+    if size <= 0:
+        return [items]
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+def _weekday_abbrev_pt(d: date) -> str:
+    labels = ["SEG", "TER", "QUA", "QUI", "SEX", "SÃB", "DOM"]
+    try:
+        return labels[d.weekday()]
+    except Exception:
+        return ""
+
+
+def _sigla_nome(nome: str) -> str:
+    parts = [p for p in (nome or "").strip().split() if p]
+    if not parts:
+        return ""
+    return parts[0][:3].upper()
+
+
+def _build_hour_slots(hora_inicio: str, hora_fim: str) -> List[Dict[str, str]]:
+    try:
+        hi = datetime.strptime((hora_inicio or "").strip(), "%H:%M")
+        hf = datetime.strptime((hora_fim or "").strip(), "%H:%M")
+    except Exception:
+        return []
+    if hf <= hi:
+        return []
+
+    slots: List[Dict[str, str]] = []
+    cur = hi
+    while cur < hf:
+        nxt = cur + timedelta(hours=1)
+        if nxt > hf:
+            break
+        slots.append({"label": f"{cur.strftime('%Hh')}-{nxt.strftime('%Hh')}"})
+        cur = nxt
+    return slots
+
+
+def _extract_course_units(course: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not course:
+        return []
+
+    # no teu sistema vocÃª salva UCs no course como "curricular_units"
+    raw = course.get("curricular_units") or []
+
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            raw = []
+
+    normalized: List[Dict[str, Any]] = []
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            desc = (item.get("nome") or "").strip()
+            ch = item.get("carga_horaria") or ""
+            try:
+                ch_val = float(str(ch).replace(",", ".").strip()) if str(ch).strip() else 0.0
+            except Exception:
+                ch_val = 0.0
+            if desc:
+                normalized.append({"desc": desc, "carga_horaria": ch_val})
+
+    out: List[Dict[str, Any]] = []
+    for idx, item in enumerate(normalized, start=1):
+        desc_upper = item["desc"].upper()
+        out.append(
+            {
+                "label": f"UC{idx}",
+                "desc": item["desc"],
+                "carga_horaria": float(item["carga_horaria"]),
+                "is_pi": ("PROJETO INTEGRADOR" in desc_upper),
+            }
+        )
+    return out
+
+
+def _days_needed(hours: float, slots_per_day: int) -> int:
+    if slots_per_day <= 0:
+        return 0
+    return max(1, int(math.ceil(hours / float(slots_per_day))))
+
+
+def _build_day_sequence_with_pi(units: List[Dict[str, Any]], slots_per_day: int) -> List[Dict[str, Any]]:
+    if not units or slots_per_day <= 0:
+        return []
+
+    pi_units = [u for u in units if u.get("is_pi")]
+    non_pi_units = [u for u in units if not u.get("is_pi")]
+
+    non_pi_days: List[Dict[str, Any]] = []
+    for u in non_pi_units:
+        for _ in range(_days_needed(u["carga_horaria"], slots_per_day)):
+            non_pi_days.append({"label": u["label"], "is_pi": False})
+
+    pi_days: List[Dict[str, Any]] = []
+    for u in pi_units:
+        for _ in range(_days_needed(u["carga_horaria"], slots_per_day)):
+            pi_days.append({"label": u["label"], "is_pi": True})
+
+    if not pi_days:
+        return non_pi_days
+    if not non_pi_days:
+        return pi_days
+
+    mixed: List[Dict[str, Any]] = []
+    n = len(non_pi_days)
+    p = len(pi_days)
+    step = max(1, int(round(n / float(p))))
+
+    pi_i = 0
+    for i, item in enumerate(non_pi_days, start=1):
+        mixed.append(item)
+        if (i % step == 0) and pi_i < p:
+            mixed.append(pi_days[pi_i])
+            pi_i += 1
+
+    insert_pos = max(1, len(mixed) // 2)
+    while pi_i < p:
+        mixed.insert(insert_pos, pi_days[pi_i])
+        pi_i += 1
+        insert_pos = min(len(mixed), insert_pos + 2)
+
+    return mixed
+
+
+def _map_class_days_to_uc(class_days: List[date], day_sequence: List[Dict[str, Any]]) -> Dict[date, Dict[str, Any]]:
+    mapping: Dict[date, Dict[str, Any]] = {}
+    for idx, d in enumerate(class_days):
+        if idx < len(day_sequence):
+            mapping[d] = day_sequence[idx]
+        else:
+            mapping[d] = {"label": "", "is_pi": False}
+    return mapping
+
 
 def _compute_schedule_end_date(
     ano: Any,
@@ -278,15 +429,15 @@ def _compute_schedule_end_date(
         return None, "Informe o ano."
     course = get_course(curso_id) if curso_id else None
     if not course:
-        return None, "Curso não encontrado."
+        return None, "Curso nÃ£o encontrado."
     shift = get_shift(turno_id) if turno_id else None
     if not shift:
-        return None, "Turno não encontrado."
+        return None, "Turno nÃ£o encontrado."
 
     ch_total = _parse_hours_value(course.get("carga_horaria_total"))
     hs_dia = _parse_hours_value(shift.get("hs_dia"))
     if ch_total is None or hs_dia is None:
-        return None, "Carga horária ou horas/dia inválidas."
+        return None, "Carga horÃ¡ria ou horas/dia invÃ¡lidas."
 
     calendario = get_calendar(year_value)
     end_date, error = _calculate_end_date(
@@ -298,12 +449,13 @@ def _compute_schedule_end_date(
         calendario or {},
     )
     if error or not end_date:
-        return None, error or "Não foi possível calcular a data final."
+        return None, error or "NÃ£o foi possÃ­vel calcular a data final."
     return end_date.strftime("%d/%m/%Y"), None
 
 
 @app.get("/")
 def dashboard(request: Request):
+
     return _render(
         request,
         "dashboard.html",
@@ -450,6 +602,7 @@ def rooms_create(
     request: Request,
     room_id: str = Form(""),
     nome: str = Form(...),
+    abreviacao: str = Form(""),
     capacidade: str = Form(...),
     pavimento: str = Form(...),
     recursos: str = Form(""),
@@ -458,6 +611,7 @@ def rooms_create(
     payload = {
         "id": room_id,
         "nome": nome,
+        "abreviacao": abreviacao.strip(),
         "capacidade": _parse_int(capacidade) or capacidade,
         "pavimento": pavimento,
         "recursos": [item.strip() for item in recursos.split(",") if item.strip()],
@@ -487,6 +641,7 @@ def rooms_update(
     request: Request,
     room_id: str,
     nome: str = Form(...),
+    abreviacao: str = Form(""),
     capacidade: str = Form(...),
     pavimento: str = Form(...),
     recursos: str = Form(""),
@@ -494,6 +649,7 @@ def rooms_update(
 ):
     updates = {
         "nome": nome,
+        "abreviacao": abreviacao.strip(),
         "capacidade": _parse_int(capacidade) or capacidade,
         "pavimento": pavimento,
         "recursos": [item.strip() for item in recursos.split(",") if item.strip()],
@@ -781,7 +937,7 @@ async def calendars_create(
     dias_letivos = [_parse_days_list(form_data.get(f"dias_letivos_{idx}", "")) for idx in range(1, 13)]
     feriados = [_parse_days_list(form_data.get(f"feriados_{idx}", "")) for idx in range(1, 13)]
     if not any(dias_letivos):
-        _flash(request, "Preencha ao menos um dia letivo no calendário.", "error")
+        _flash(request, "Preencha ao menos um dia letivo no calendÃ¡rio.", "error")
         totals = _sum_calendar_totals(dias_letivos, feriados)
         return _render(
             request,
@@ -807,7 +963,7 @@ async def calendars_create(
     }
     try:
         create_calendar(payload)
-        _flash(request, "Calendário cadastrado com sucesso.")
+        _flash(request, "CalendÃ¡rio cadastrado com sucesso.")
         return RedirectResponse("/calendars", status_code=303)
     except ValidationError as exc:
         _flash(request, str(exc), "error")
@@ -852,7 +1008,7 @@ async def calendars_update(
     dias_letivos = [_parse_days_list(form_data.get(f"dias_letivos_{idx}", "")) for idx in range(1, 13)]
     feriados = [_parse_days_list(form_data.get(f"feriados_{idx}", "")) for idx in range(1, 13)]
     if not any(dias_letivos):
-        _flash(request, "Preencha ao menos um dia letivo no calendário.", "error")
+        _flash(request, "Preencha ao menos um dia letivo no calendÃ¡rio.", "error")
         totals = _sum_calendar_totals(dias_letivos, feriados)
         return _render(
             request,
@@ -877,7 +1033,7 @@ async def calendars_update(
     }
     try:
         update_calendar(year, updates)
-        _flash(request, "Calendário atualizado com sucesso.")
+        _flash(request, "CalendÃ¡rio atualizado com sucesso.")
         return RedirectResponse("/calendars", status_code=303)
     except ValidationError as exc:
         updates["ano"] = year
@@ -898,7 +1054,7 @@ async def calendars_update(
 def calendars_delete(request: Request, year: int):
     try:
         delete_calendar(year)
-        _flash(request, "Calendário removido com sucesso.")
+        _flash(request, "CalendÃ¡rio removido com sucesso.")
     except ValidationError as exc:
         _flash(request, str(exc), "error")
     return RedirectResponse("/calendars", status_code=303)
@@ -908,15 +1064,17 @@ def calendars_delete(request: Request, year: int):
 def calendars_view(request: Request, year: int):
     calendar = get_calendar(year)
     if not calendar:
-        _flash(request, "Calendário não encontrado.", "error")
+        _flash(request, "CalendÃ¡rio nÃ£o encontrado.", "error")
         return RedirectResponse("/calendars", status_code=302)
     months_view = []
     for idx, month in enumerate(MONTHS, start=1):
+        letivos_set = set(calendar.get("dias_letivos_por_mes", [[] for _ in range(12)])[idx - 1])
         months_view.append(
             {
                 "label": month["label"],
                 "weeks": _build_month_grid(year, idx),
-                "letivos": set(calendar.get("dias_letivos_por_mes", [[] for _ in range(12)])[idx - 1]),
+                "letivos": letivos_set,
+                "letivos_count": len(letivos_set),
                 "feriados": set(calendar.get("feriados_por_mes", [[] for _ in range(12)])[idx - 1]),
             }
         )
@@ -1070,17 +1228,37 @@ def programming_list(
     request: Request,
     ano: str = "",
     mes: str = "",
+    trimestre: str = "",
+    print_mode: str = "",
 ):
+    quarter_map = {
+        "1": {"label": "1º Trimestre", "months": {"1", "2", "3"}},
+        "2": {"label": "2º Trimestre", "months": {"4", "5", "6"}},
+        "3": {"label": "3º Trimestre", "months": {"7", "8", "9"}},
+        "4": {"label": "4º Trimestre", "months": {"10", "11", "12"}},
+    }
+
+    # Regra de exclusao mutua: mes tem prioridade sobre trimestre.
+    if mes:
+        trimestre = ""
+
     items = list_schedules()
 
     if ano:
         items = [item for item in items if str(item.get("ano", "")) == str(ano)]
     if mes:
         items = [item for item in items if str(item.get("mes", "")) == str(mes)]
+    elif trimestre in quarter_map:
+        quarter_months = quarter_map[trimestre]["months"]
+        items = [item for item in items if str(item.get("mes", "")) in quarter_months]
 
     all_items = list_schedules()
     if ano:
         all_items = [item for item in all_items if str(item.get("ano", "")) == str(ano)]
+    if trimestre in quarter_map:
+        all_items = [
+            item for item in all_items if str(item.get("mes", "")) in quarter_map[trimestre]["months"]
+        ]
     months_available = {str(item.get("mes")) for item in all_items if item.get("mes")}
     month_options = [month for month in MONTHS if month["value"] in months_available]
     courses = list_courses()
@@ -1088,12 +1266,190 @@ def programming_list(
     shifts = list_shifts()
     instructors = list_instructors()
     course_map = {item["id"]: item.get("nome", item["id"]) for item in courses}
+    course_type_map = {item["id"]: item.get("tipo_curso", "—") for item in courses}
     room_map = {item["id"]: item.get("nome", item["id"]) for item in rooms}
+    room_abbr_map = {item["id"]: (item.get("abreviacao") or "") for item in rooms}
     shift_map = {item["id"]: item.get("nome", item["id"]) for item in shifts}
     instructor_map = {
         item["id"]: item.get("nome_sobrenome") or item.get("nome", item["id"])
         for item in instructors
     }
+
+    month_name_map = {m["value"]: m["label"] for m in MONTHS}
+
+    def _abbr_ambiente(name: str) -> str:
+        words = [w for w in (name or "").replace("/", " ").split() if w]
+        if not words:
+            return "—"
+        ignored = {"de", "da", "do", "das", "dos", "e"}
+        key_words = [w for w in words if w.lower() not in ignored]
+        source = key_words if key_words else words
+        if len(source) == 1:
+            return source[0][:12]
+        return "".join([w[0].upper() for w in source[:4]])
+
+    def _format_pavimento(value: Any) -> str:
+        text = str(value or "").strip().lower()
+        if not text:
+            return "—"
+        if "ter" in text or text == "0":
+            return "Térreo"
+        if text.startswith("1") or "1o" in text or "1º" in text:
+            return "1º Andar"
+        return str(value)
+
+    def _format_horario(inicio: Any, fim: Any) -> str:
+        hi = str(inicio or "").strip()
+        hf = str(fim or "").strip()
+        if not hi or not hf:
+            return "—"
+        hi_h = hi.split(":")[0].zfill(2) if ":" in hi else hi
+        hf_h = hf.split(":")[0].zfill(2) if ":" in hf else hf
+        return f"{hi_h}h às {hf_h}h"
+
+    def _first_name(full_name: Any) -> str:
+        text = str(full_name or "").strip()
+        if not text:
+            return "—"
+        return text.split()[0]
+
+    def _short_date(raw: Any) -> str:
+        text = str(raw or "").strip()
+        if not text:
+            return "—"
+        parts = text.split("/")
+        if len(parts) == 3 and len(parts[2]) == 4:
+            return f"{parts[0]}/{parts[1]}/{parts[2][2:]}"
+        return text
+
+    def _format_periodo_short(inicio: Any, fim: Any) -> str:
+        return f"{_short_date(inicio)} a {_short_date(fim)}"
+
+    def _compress_days(days_list: List[str]) -> str:
+        order = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "SAB", "DOM"]
+        idx_map = {d: i for i, d in enumerate(order)}
+        clean = [str(d).strip().upper() for d in (days_list or []) if str(d).strip()]
+        clean = [d for d in clean if d in idx_map]
+        if not clean:
+            return "—"
+        uniq = sorted(set(clean), key=lambda d: idx_map[d])
+
+        ranges: List[str] = []
+        start = uniq[0]
+        prev = uniq[0]
+        for cur in uniq[1:]:
+            if idx_map[cur] == idx_map[prev] + 1:
+                prev = cur
+                continue
+            ranges.append(start if start == prev else f"{start}-{prev}")
+            start = cur
+            prev = cur
+        ranges.append(start if start == prev else f"{start}-{prev}")
+        return ", ".join(ranges)
+
+    def _schedule_instructors(schedule_item: Dict[str, Any]) -> str:
+        ids = schedule_item.get("instrutor_ids") or []
+        if isinstance(ids, str):
+            ids = [ids]
+        ids = [str(i).strip() for i in ids if str(i).strip()]
+        if not ids and schedule_item.get("instrutor_id"):
+            ids = [str(schedule_item.get("instrutor_id"))]
+        names = [instructor_map.get(i, i) for i in ids]
+        return " / ".join(names) if names else "—"
+
+    report_rows: List[Dict[str, Any]] = []
+    for item in items:
+        month_value = str(item.get("mes") or "")
+        report_rows.append(
+            {
+                "mes": month_value,
+                "mes_label": month_name_map.get(month_value, month_value or "—"),
+                "turno": shift_map.get(item.get("turno_id"), item.get("turno_id") or "—"),
+                "pavimento": _format_pavimento(item.get("pavimento")),
+                "ambiente": (
+                    room_abbr_map.get(item.get("sala_id")) or
+                    _abbr_ambiente(room_map.get(item.get("sala_id"), item.get("sala_id") or ""))
+                ),
+                "qtd_alunos": item.get("qtd_alunos") or "—",
+                "curso": course_map.get(item.get("curso_id"), item.get("curso_id") or "—"),
+                "tipo": course_type_map.get(item.get("curso_id"), "—"),
+                "periodo": _format_periodo_short(item.get("data_inicio"), item.get("data_fim")),
+                "ch": item.get("ch_total") or "—",
+                "turma": item.get("turma") or "—",
+                "horario": _format_horario(item.get("hora_inicio"), item.get("hora_fim")),
+                "analista": _first_name(
+                    instructor_map.get(item.get("analista_id"), item.get("analista_id") or "—")
+                ),
+                "assistente": instructor_map.get(item.get("assistente_id"), item.get("assistente_id") or "—"),
+                "instrutor": _schedule_instructors(item),
+                "dias": _compress_days(item.get("dias_execucao") or []),
+            }
+        )
+
+    def _turno_order(value: str) -> int:
+        text = (value or "").strip().lower()
+        text = (
+            text.replace("ã", "a")
+            .replace("á", "a")
+            .replace("â", "a")
+            .replace("é", "e")
+            .replace("ê", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ô", "o")
+            .replace("õ", "o")
+            .replace("ú", "u")
+        )
+        if "manha" in text:
+            return 0
+        if "tarde" in text:
+            return 1
+        if "noite" in text:
+            return 2
+        return 9
+
+    report_rows.sort(
+        key=lambda row: (
+            int(row["mes"]) if str(row.get("mes", "")).isdigit() else 99,
+            _turno_order(row.get("turno", "")),
+            row.get("horario", ""),
+            row.get("curso", ""),
+        )
+    )
+
+    report_month_groups: List[Dict[str, Any]] = []
+    if mes:
+        label = month_name_map.get(str(mes), str(mes))
+        report_month_groups.append(
+            {
+                "value": str(mes),
+                "label": label,
+                "rows": [row for row in report_rows if row["mes"] == str(mes)],
+            }
+        )
+    elif trimestre in quarter_map:
+        for month in MONTHS:
+            if month["value"] not in quarter_map[trimestre]["months"]:
+                continue
+            report_month_groups.append(
+                {
+                    "value": month["value"],
+                    "label": month["label"],
+                    "rows": [row for row in report_rows if row["mes"] == month["value"]],
+                }
+            )
+    else:
+        for month in MONTHS:
+            month_rows = [row for row in report_rows if row["mes"] == month["value"]]
+            if not month_rows:
+                continue
+            report_month_groups.append(
+                {
+                    "value": month["value"],
+                    "label": month["label"],
+                    "rows": month_rows,
+                }
+            )
 
     return _render(
         request,
@@ -1107,12 +1463,183 @@ def programming_list(
         room_map=room_map,
         shift_map=shift_map,
         instructor_map=instructor_map,
+        report_rows=report_rows,
+        report_month_groups=report_month_groups,
         months=month_options,
         all_months=MONTHS,
+        quarter_options=[
+            {"value": "", "label": "Todos"},
+            {"value": "1", "label": "1º Trimestre"},
+            {"value": "2", "label": "2º Trimestre"},
+            {"value": "3", "label": "3º Trimestre"},
+            {"value": "4", "label": "4º Trimestre"},
+        ],
         filters={
             "ano": ano,
             "mes": mes,
+            "trimestre": trimestre,
         },
+        auto_print=(print_mode == "1"),
+    )
+
+
+@app.get("/programming/current")
+def programming_current(request: Request):
+    today = date.today()
+    year_value = str(today.year)
+    month_value = str(today.month)
+
+    items = [
+        item
+        for item in list_schedules()
+        if str(item.get("ano", "")) == year_value and str(item.get("mes", "")) == month_value
+    ]
+
+    courses = list_courses()
+    rooms = list_rooms()
+    shifts = list_shifts()
+    instructors = list_instructors()
+    course_map = {item["id"]: item.get("nome", item["id"]) for item in courses}
+    room_map = {item["id"]: item.get("nome", item["id"]) for item in rooms}
+    room_abbr_map = {item["id"]: (item.get("abreviacao") or "") for item in rooms}
+    shift_map = {item["id"]: item.get("nome", item["id"]) for item in shifts}
+    instructor_map = {
+        item["id"]: item.get("nome_sobrenome") or item.get("nome", item["id"])
+        for item in instructors
+    }
+    month_name_map = {m["value"]: m["label"] for m in MONTHS}
+
+    def _abbr_ambiente(name: str) -> str:
+        words = [w for w in (name or "").replace("/", " ").split() if w]
+        if not words:
+            return "—"
+        ignored = {"de", "da", "do", "das", "dos", "e"}
+        key_words = [w for w in words if w.lower() not in ignored]
+        source = key_words if key_words else words
+        if len(source) == 1:
+            return source[0][:12]
+        return "".join([w[0].upper() for w in source[:4]])
+
+    def _format_pavimento(value: Any) -> str:
+        text = str(value or "").strip().lower()
+        if not text:
+            return "—"
+        if "ter" in text or text == "0":
+            return "Térreo"
+        if text.startswith("1") or "1o" in text or "1º" in text:
+            return "1º Andar"
+        return str(value)
+
+    def _first_name(full_name: Any) -> str:
+        text = str(full_name or "").strip()
+        if not text:
+            return "—"
+        return text.split()[0]
+
+    def _short_date(raw: Any) -> str:
+        text = str(raw or "").strip()
+        if not text:
+            return "—"
+        parts = text.split("/")
+        if len(parts) == 3 and len(parts[2]) == 4:
+            return f"{parts[0]}/{parts[1]}/{parts[2][2:]}"
+        return text
+
+    def _format_horario(inicio: Any, fim: Any) -> str:
+        hi = str(inicio or "").strip()
+        hf = str(fim or "").strip()
+        if not hi or not hf:
+            return "—"
+        hi_h = hi.split(":")[0].zfill(2) if ":" in hi else hi
+        hf_h = hf.split(":")[0].zfill(2) if ":" in hf else hf
+        return f"{hi_h}h às {hf_h}h"
+
+    def _compress_days(days_list: List[str]) -> str:
+        order = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "SAB", "DOM"]
+        idx_map = {d: i for i, d in enumerate(order)}
+        clean = [str(d).strip().upper() for d in (days_list or []) if str(d).strip()]
+        clean = [d for d in clean if d in idx_map]
+        if not clean:
+            return "—"
+        uniq = sorted(set(clean), key=lambda d: idx_map[d])
+        ranges: List[str] = []
+        start = uniq[0]
+        prev = uniq[0]
+        for cur in uniq[1:]:
+            if idx_map[cur] == idx_map[prev] + 1:
+                prev = cur
+                continue
+            ranges.append(start if start == prev else f"{start}-{prev}")
+            start = cur
+            prev = cur
+        ranges.append(start if start == prev else f"{start}-{prev}")
+        return ", ".join(ranges)
+
+    def _schedule_instructors(schedule_item: Dict[str, Any]) -> str:
+        ids = schedule_item.get("instrutor_ids") or []
+        if isinstance(ids, str):
+            ids = [ids]
+        ids = [str(i).strip() for i in ids if str(i).strip()]
+        if not ids and schedule_item.get("instrutor_id"):
+            ids = [str(schedule_item.get("instrutor_id"))]
+        names = [instructor_map.get(i, i) for i in ids]
+        return " / ".join(names) if names else "—"
+
+    def _turno_order(value: str) -> int:
+        text = (value or "").strip().lower()
+        text = (
+            text.replace("ã", "a")
+            .replace("á", "a")
+            .replace("â", "a")
+            .replace("é", "e")
+            .replace("ê", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ô", "o")
+            .replace("õ", "o")
+            .replace("ú", "u")
+        )
+        if "manha" in text:
+            return 0
+        if "tarde" in text:
+            return 1
+        if "noite" in text:
+            return 2
+        return 9
+
+    rows: List[Dict[str, Any]] = []
+    for item in items:
+        rows.append(
+            {
+                "turno": shift_map.get(item.get("turno_id"), item.get("turno_id") or "—"),
+                "pavimento": _format_pavimento(item.get("pavimento")),
+                "ambiente": (
+                    room_abbr_map.get(item.get("sala_id")) or
+                    _abbr_ambiente(room_map.get(item.get("sala_id"), item.get("sala_id") or ""))
+                ),
+                "qtd_alunos": item.get("qtd_alunos") or "—",
+                "curso": course_map.get(item.get("curso_id"), item.get("curso_id") or "—"),
+                "periodo": f"{_short_date(item.get('data_inicio'))} a {_short_date(item.get('data_fim'))}",
+                "ch": item.get("ch_total") or "—",
+                "turma": item.get("turma") or "—",
+                "horario": _format_horario(item.get("hora_inicio"), item.get("hora_fim")),
+                "analista": _first_name(
+                    instructor_map.get(item.get("analista_id"), item.get("analista_id") or "—")
+                ),
+                "assistente": instructor_map.get(item.get("assistente_id"), item.get("assistente_id") or "—"),
+                "instrutor": _schedule_instructors(item),
+                "dias": _compress_days(item.get("dias_execucao") or []),
+            }
+        )
+
+    rows.sort(key=lambda row: (_turno_order(row.get("turno", "")), row.get("horario", ""), row.get("curso", "")))
+
+    return _render(
+        request,
+        "programming_current.html",
+        month_label=month_name_map.get(month_value, month_value),
+        year_value=year_value,
+        rows=rows,
     )
 
 
@@ -1185,21 +1712,27 @@ def schedules_create(
     hora_inicio: str = Form(...),
     hora_fim: str = Form(...),
     analista_id: str = Form(...),
-    instrutor_id: str = Form(...),
+    instrutor_id: str = Form(""),
+    instrutor_ids: List[str] = Form([]),
     dias_execucao: List[str] = Form([]),
     observacoes: str = Form(""),
 ):
     course = get_course(curso_id)
     room = get_room(sala_id)
+
     ch_value = course.get("carga_horaria_total") if course else ch_total
     floor_value = room.get("pavimento") if room else pavimento
     capacity_value = room.get("capacidade") if room else qtd_alunos
+
+    selected_instructors = _normalize_instructor_ids(instrutor_ids, instrutor_id)
+
     payload = {
         "id": schedule_id,
         "ano": _parse_int(ano) or ano,
         "mes": _parse_int(mes) or mes,
         "curso_id": curso_id,
-        "instrutor_id": instrutor_id,
+        "instrutor_id": selected_instructors[0] if selected_instructors else "",
+        "instrutor_ids": selected_instructors,
         "analista_id": analista_id,
         "sala_id": sala_id,
         "pavimento": floor_value,
@@ -1215,26 +1748,37 @@ def schedules_create(
         "dias_execucao": dias_execucao,
         "observacoes": observacoes,
     }
+
     try:
-        computed_end_date, _ = _compute_schedule_end_date(
+        if not selected_instructors:
+            raise ValidationError("Informe ao menos um instrutor.")
+        computed_end_date, error = _compute_schedule_end_date(
             payload.get("ano"),
             payload.get("data_inicio", ""),
             payload.get("dias_execucao", []),
             payload.get("curso_id", ""),
             payload.get("turno_id", ""),
         )
-        if computed_end_date and payload.get("data_fim") != computed_end_date:
+
+        if error:
+            raise ValidationError(error)
+
+        if payload.get("data_fim") != computed_end_date:
             raise ValidationError(
-                "Data final não confere com o calendário. Recalcule a data final antes de salvar."
+                "Data final nÃ£o confere com o calendÃ¡rio. Recalcule antes de salvar."
             )
+
         create_schedule(payload)
         _flash(request, "Oferta criada com sucesso.")
-        return RedirectResponse("/programming", status_code=303)
+        return RedirectResponse("/programming/new", status_code=303)
+
     except ValidationError as exc:
         _flash(request, str(exc), "error")
+
         collaborators = list_instructors()
-        analysts = [item for item in collaborators if item.get("role") == "Analista"]
-        instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
+        analysts = [c for c in collaborators if c.get("role") == "Analista"]
+        instructors = [c for c in collaborators if c.get("role") == "Instrutor"]
+
         return _render(
             request,
             "schedule_form.html",
@@ -1247,6 +1791,8 @@ def schedules_create(
             shifts=list_shifts(),
             months=MONTHS,
         )
+
+
 
 
 @app.get("/programming/{schedule_id}/edit")
@@ -1289,7 +1835,8 @@ def schedules_update(
     hora_inicio: str = Form(...),
     hora_fim: str = Form(...),
     analista_id: str = Form(...),
-    instrutor_id: str = Form(...),
+    instrutor_id: str = Form(""),
+    instrutor_ids: List[str] = Form([]),
     dias_execucao: List[str] = Form([]),
     observacoes: str = Form(""),
 ):
@@ -1298,11 +1845,14 @@ def schedules_update(
     ch_value = course.get("carga_horaria_total") if course else ch_total
     floor_value = room.get("pavimento") if room else pavimento
     capacity_value = room.get("capacidade") if room else qtd_alunos
+    selected_instructors = _normalize_instructor_ids(instrutor_ids, instrutor_id)
+
     updates = {
         "ano": _parse_int(ano) or ano,
         "mes": _parse_int(mes) or mes,
         "curso_id": curso_id,
-        "instrutor_id": instrutor_id,
+        "instrutor_id": selected_instructors[0] if selected_instructors else "",
+        "instrutor_ids": selected_instructors,
         "analista_id": analista_id,
         "sala_id": sala_id,
         "pavimento": floor_value,
@@ -1319,6 +1869,8 @@ def schedules_update(
         "observacoes": observacoes,
     }
     try:
+        if not selected_instructors:
+            raise ValidationError("Informe ao menos um instrutor.")
         computed_end_date, _ = _compute_schedule_end_date(
             updates.get("ano"),
             updates.get("data_inicio", ""),
@@ -1328,7 +1880,7 @@ def schedules_update(
         )
         if computed_end_date and updates.get("data_fim") != computed_end_date:
             raise ValidationError(
-                "Data final não confere com o calendário. Recalcule a data final antes de salvar."
+                "Data final nÃ£o confere com o calendÃ¡rio. Recalcule a data final antes de salvar."
             )
         update_schedule(schedule_id, updates)
         _flash(request, "Oferta atualizada com sucesso.")
@@ -1396,4 +1948,351 @@ def chronograms_list(
         instructors=instructors,
         analysts=analysts,
         assistants=assistants,
+    )
+def _parse_date_br(value: str) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value.strip(), "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
+def _weekday_set_from_execucao(dias_execucao: List[str]) -> set[int]:
+    weekday_map = {"SEG": 0, "TER": 1, "QUA": 2, "QUI": 3, "SEX": 4, "SÃB": 5, "SAB": 5}
+    return {weekday_map[d] for d in dias_execucao if d in weekday_map}
+
+
+def _calc_hs_dia_from_shift(shift: Optional[Dict[str, Any]]) -> float:
+    if not shift:
+        return 0.0
+
+    hs_dia = _parse_hours_value(shift.get("hs_dia"))
+    if hs_dia:
+        return float(hs_dia)
+
+    # Se hs_dia nÃ£o estiver salvo, calcula pelo horÃ¡rio inicio/fim
+    inicio = shift.get("horario_inicio") or ""
+    fim = shift.get("horario_fim") or ""
+    try:
+        sh, sm = [int(x) for x in inicio.split(":")]
+        eh, em = [int(x) for x in fim.split(":")]
+    except Exception:
+        return 0.0
+
+    start = sh * 60 + sm
+    end = eh * 60 + em
+    if end <= start:
+        return 0.0
+    diff = end - start
+    return diff / 60.0
+
+
+def _get_course_units_for_pre(course_id: str) -> List[Dict[str, Any]]:
+    # Prioridade: UCs cadastradas no prÃ³prio curso (curricular_units)
+    course = get_course(course_id) if course_id else None
+    if course and isinstance(course.get("curricular_units"), list) and course["curricular_units"]:
+        units = course["curricular_units"]
+        # normaliza
+        cleaned = []
+        for u in units:
+            cleaned.append(
+                {
+                    "id": u.get("id") or "",
+                    "nome": u.get("nome") or "",
+                    "carga_horaria": u.get("carga_horaria") if u.get("carga_horaria") is not None else "",
+                }
+            )
+        return cleaned
+
+    # Fallback: UCs do mÃ³dulo src.curricular_units (relacionadas por curso_id)
+    items = [u for u in list_units() if str(u.get("curso_id", "")) == str(course_id)]
+    # ordena por id se existir, senÃ£o por nome
+    items.sort(key=lambda x: (str(x.get("id", "")), str(x.get("nome", ""))))
+    return items
+
+
+def _is_pi_unit(unit: Dict[str, Any]) -> bool:
+    nome = (unit.get("nome") or "").lower()
+    uid = (unit.get("id") or "").lower()
+    return ("projeto integrador" in nome) or (uid in ("pi", "ucpi"))
+
+
+def _distribute_units_over_dates(
+    exec_dates: List[date],
+    units: List[Dict[str, Any]],
+    hs_dia: float,
+) -> Dict[str, Dict[str, str]]:
+    """
+    Retorna: map[YYYY-MM-DD][uc_key] = "UCx" (ou "PI") para renderizar em cada cÃ©lula.
+    """
+    grid: Dict[str, Dict[str, str]] = {}
+    if not exec_dates or not units or hs_dia <= 0:
+        return grid
+
+    idx_date = 0
+    for i, unit in enumerate(units, start=1):
+        ch = _parse_hours_value(unit.get("carga_horaria"))
+        ch_val = float(ch) if ch is not None else 0.0
+        if ch_val <= 0:
+            continue
+
+        needed_days = int(math.ceil(ch_val / hs_dia))
+        label = "PI" if _is_pi_unit(unit) else f"UC{i}"
+
+        for _ in range(needed_days):
+            if idx_date >= len(exec_dates):
+                break
+            d = exec_dates[idx_date]
+            key = d.isoformat()
+            grid.setdefault(key, {})
+            grid[key][str(i)] = label
+            idx_date += 1
+
+    return grid
+
+
+def _build_unit_day_sequence(units: List[Dict[str, Any]], slots_per_day: int) -> List[str]:
+    """
+    Sequencia de labels por dia (UCx/PI), mantendo blocos por UC e distribuindo PI entre as demais.
+    """
+    if not units or slots_per_day <= 0:
+        return []
+
+    non_pi_days: List[str] = []
+    pi_days: List[str] = []
+
+    for i, unit in enumerate(units, start=1):
+        ch = _parse_hours_value(unit.get("carga_horaria"))
+        ch_val = float(ch) if ch is not None else 0.0
+        if ch_val <= 0:
+            continue
+
+        needed_days = int(math.ceil(ch_val / float(slots_per_day)))
+        label = "PI" if _is_pi_unit(unit) else f"UC{i}"
+
+        if label == "PI":
+            pi_days.extend([label] * needed_days)
+        else:
+            non_pi_days.extend([label] * needed_days)
+
+    if not pi_days:
+        return non_pi_days
+    if not non_pi_days:
+        return pi_days
+
+    mixed: List[str] = []
+    step = max(1, int(round(len(non_pi_days) / float(len(pi_days)))))
+    pi_idx = 0
+
+    for i, label in enumerate(non_pi_days, start=1):
+        mixed.append(label)
+        if i % step == 0 and pi_idx < len(pi_days):
+            mixed.append(pi_days[pi_idx])
+            pi_idx += 1
+
+    insert_pos = max(1, len(mixed) // 2)
+    while pi_idx < len(pi_days):
+        mixed.insert(insert_pos, pi_days[pi_idx])
+        pi_idx += 1
+        insert_pos = min(len(mixed), insert_pos + 2)
+
+    return mixed
+
+
+def _map_dates_to_uc_label(
+    exec_dates: List[date],
+    units: List[Dict[str, Any]],
+    slots_per_day: int,
+) -> Dict[str, str]:
+    """
+    map[YYYY-MM-DD] = UCx/PI (aplicado nas linhas de horario do dia).
+    """
+    mapping: Dict[str, str] = {}
+    if not exec_dates or slots_per_day <= 0:
+        return mapping
+
+    day_sequence = _build_unit_day_sequence(units, slots_per_day)
+    for idx, d in enumerate(exec_dates):
+        mapping[d.isoformat()] = day_sequence[idx] if idx < len(day_sequence) else ""
+    return mapping
+
+
+def _build_day_instructor_sigla_map(
+    exec_dates: List[date],
+    day_uc_map: Dict[str, str],
+    instructor_names: List[str],
+) -> Dict[str, str]:
+    """
+    Alterna instrutores por UC: cada UC recebe um instrutor em round-robin.
+    """
+    siglas = [_sigla_nome(name) for name in instructor_names if (name or "").strip()]
+    if not exec_dates or not siglas:
+        return {}
+
+    uc_to_sigla: Dict[str, str] = {}
+    next_idx = 0
+    result: Dict[str, str] = {}
+
+    for d in exec_dates:
+        key = d.isoformat()
+        uc_label = (day_uc_map.get(key) or "").strip()
+        if not uc_label:
+            result[key] = ""
+            continue
+
+        if uc_label not in uc_to_sigla:
+            uc_to_sigla[uc_label] = siglas[next_idx % len(siglas)]
+            next_idx += 1
+
+        result[key] = uc_to_sigla[uc_label]
+
+    return result
+
+
+@app.get("/programming/{schedule_id}/pre-chronogram")
+def pre_chronogram(
+    request: Request,
+    schedule_id: str,
+    layout: str = "portrait",   # portrait | landscape
+    compact: str = "1",         # 1 = compactado, 0 = normal
+):
+    schedule = get_schedule(schedule_id)
+    if not schedule:
+        _flash(request, "ProgramaÃ§Ã£o nÃ£o encontrada.", "error")
+        return RedirectResponse("/programming", status_code=302)
+
+    # entidades
+    course = get_course(schedule.get("curso_id"))
+    schedule_instructor_ids = _normalize_instructor_ids(
+        schedule.get("instrutor_ids") or [],
+        str(schedule.get("instrutor_id") or ""),
+    )
+    instructor_items = [get_instructor(iid) for iid in schedule_instructor_ids]
+    instructor_items = [item for item in instructor_items if item]
+    instructor = instructor_items[0] if instructor_items else None
+    analyst = get_instructor(schedule.get("analista_id"))
+    shift = get_shift(schedule.get("turno_id"))
+    room = get_room(schedule.get("sala_id"))
+
+    # datas
+    start_date = _parse_date_br(schedule.get("data_inicio") or "")
+    end_date = _parse_date_br(schedule.get("data_fim") or "")
+    if not start_date or not end_date:
+        _flash(request, "Datas invÃ¡lidas para gerar prÃ©-cronograma.", "error")
+        return RedirectResponse("/programming", status_code=302)
+
+    year_value = _parse_int(str(schedule.get("ano") or start_date.year)) or start_date.year
+    calendario = get_calendar(year_value) or {}
+    dias_letivos = calendario.get("dias_letivos_por_mes", [[] for _ in range(12)])
+    letivos_sets = [set(_sanitize_days_list(m)) for m in dias_letivos]
+
+    selected_weekdays = _weekday_set_from_execucao(schedule.get("dias_execucao") or [])
+    if not selected_weekdays:
+        _flash(request, "Dias de execuÃ§Ã£o nÃ£o definidos.", "error")
+        return RedirectResponse("/programming", status_code=302)
+
+    # hs_dia
+    hs_dia = _calc_hs_dia_from_shift(shift)
+    if hs_dia <= 0:
+        # ainda dÃ¡ pra mostrar, mas sem distribuiÃ§Ã£o por carga horÃ¡ria
+        hs_dia = 0.0
+    hour_slots = _build_hour_slots(schedule.get("hora_inicio") or "", schedule.get("hora_fim") or "")
+    slots_per_day = len(hour_slots)
+    if slots_per_day <= 0 and hs_dia > 0:
+        slots_per_day = max(1, int(round(hs_dia)))
+
+    # monta lista de datas executÃ¡veis (seg-sab, conforme dias_execucao + letivos)
+    exec_dates: List[date] = []
+    cur = start_date
+    while cur <= end_date:
+        if cur.year == year_value and cur.weekday() in selected_weekdays:
+            month_idx = cur.month - 1
+            if cur.day in letivos_sets[month_idx]:
+                exec_dates.append(cur)
+        cur += timedelta(days=1)
+
+    # UCs
+    units = _get_course_units_for_pre(schedule.get("curso_id") or "")
+
+    # distribui UCs por dia (mantem o mesmo label em todos os horarios do dia, quando possivel)
+    day_uc_map = _map_dates_to_uc_label(exec_dates, units, slots_per_day) if slots_per_day > 0 else {}
+    instructor_names = [
+        (item.get("nome") or item.get("nome_sobrenome") or "")
+        for item in instructor_items
+    ]
+    day_instrutor_map = _build_day_instructor_sigla_map(exec_dates, day_uc_map, instructor_names)
+
+    # agrupa por mÃªs (somente meses do intervalo)
+    months_data: List[Dict[str, Any]] = []
+    month_cursor = date(start_date.year, start_date.month, 1)
+    end_month = date(end_date.year, end_date.month, 1)
+
+    while month_cursor <= end_month:
+        y = month_cursor.year
+        m = month_cursor.month
+        label = next((x["label"] for x in MONTHS if int(x["value"]) == m), f"M\u00eas {m}")
+
+        # colunas = dias Ãºteis (SEG-SÃB) que estÃ£o na lista exec_dates e sÃ£o deste mÃªs
+        month_exec = [d for d in exec_dates if d.year == y and d.month == m]
+
+        letivos_count = len(month_exec)
+        letivos_text = (
+            f"{letivos_count} DIA LETIVO" if letivos_count == 1 else f"{letivos_count} DIAS LETIVOS"
+        )
+
+        months_data.append(
+            {
+                "year": y,
+                "month": m,
+                "label": label,
+                "dates": month_exec,
+                "letivos_count": letivos_count,
+                "letivos_text": letivos_text,
+            }
+        )
+
+        # prÃ³ximo mÃªs
+        if m == 12:
+            month_cursor = date(y + 1, 1, 1)
+        else:
+            month_cursor = date(y, m + 1, 1)
+
+    header = {
+        "curso": course.get("nome") if course else "â€”",
+        "tipo": course.get("tipo_curso") if course else "â€”",
+        "ch_total": course.get("carga_horaria_total") if course else schedule.get("ch_total") or "â€”",
+        "turma": schedule.get("turma") or "â€”",
+        "instrutor": (
+            ", ".join(
+                [(item.get("nome_sobrenome") or item.get("nome") or "—") for item in instructor_items]
+            )
+            if instructor_items
+            else "â€”"
+        ),
+        "analista": (analyst.get("nome_sobrenome") or analyst.get("nome")) if analyst else "â€”",
+        "ambiente": room.get("nome") if room else "â€”",
+        "pavimento": schedule.get("pavimento") or (room.get("pavimento") if room else "â€”"),
+        "periodo": f"{schedule.get('data_inicio') or 'â€”'} a {schedule.get('data_fim') or 'â€”'}",
+        "horario": f"{schedule.get('hora_inicio') or 'â€”'} Ã s {schedule.get('hora_fim') or 'â€”'}",
+        "dias": ", ".join(schedule.get("dias_execucao") or []),
+        "turno": shift.get("nome") if shift else "â€”",
+        "hs_dia": f"{hs_dia:.2f}".replace(".00", "") if hs_dia else "â€”",
+    }
+    header["instrutor_sigla"] = _sigla_nome(
+        (instructor.get("nome") or instructor.get("nome_sobrenome") or "") if instructor else ""
+    ) or "â€”"
+
+    return _render(
+        request,
+        "pre_chronogram.html",
+        schedule=schedule,
+        header=header,
+        layout="landscape" if layout == "landscape" else "portrait",
+        compact=(compact != "0"),
+        months_data=months_data,
+        hour_slots=hour_slots,
+        units=units,
+        day_uc_map=day_uc_map,
+        day_instrutor_map=day_instrutor_map,
     )
