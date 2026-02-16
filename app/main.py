@@ -1,8 +1,11 @@
 ﻿from __future__ import annotations
 
 import calendar as calendar_module
+import colorsys
 import json
 import math
+import re
+import secrets
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -35,6 +38,14 @@ from src.instructors import (
     list_instructors,
     update_instructor,
 )
+from src.instructor_availability import (
+    build_record_id,
+    create_or_refresh_share_token,
+    find_by_share_token,
+    get_by_context,
+    normalize_period,
+    upsert_record,
+)
 from src.rooms import create_room, delete_room, get_room, list_rooms, update_room
 from src.schedules import (
     create_schedule,
@@ -60,6 +71,8 @@ MONTHS = [
     {"value": "11", "label": "Novembro"},
     {"value": "12", "label": "Dezembro"},
 ]
+
+WEEKDAYS = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB"]
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="sistema-programacao-cursos")
@@ -106,6 +119,51 @@ def _parse_days(value: str) -> List[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _availability_period_options(period_type: str) -> List[Dict[str, str]]:
+    ptype = str(period_type or "month").strip().lower()
+    if ptype == "quarter":
+        return [{"value": str(i), "label": f"{i}º trimestre"} for i in range(1, 5)]
+    if ptype == "semester":
+        return [{"value": str(i), "label": f"{i}º semestre"} for i in range(1, 3)]
+    if ptype == "year":
+        return [{"value": "A", "label": "Ano completo"}]
+    return [{"value": str(i), "label": month["label"]} for i, month in enumerate(MONTHS, start=1)]
+
+
+def _availability_period_label(period_type: str, period_value: str) -> str:
+    ptype = str(period_type or "").strip().lower()
+    pval = str(period_value or "").strip()
+    if ptype == "quarter":
+        return f"{pval}º trimestre"
+    if ptype == "semester":
+        return f"{pval}º semestre"
+    if ptype == "year":
+        return "Ano completo"
+    if ptype == "month":
+        idx = _parse_int(pval)
+        if idx and 1 <= idx <= 12:
+            return MONTHS[idx - 1]["label"]
+    return pval or "—"
+
+
+def _parse_availability_slots(raw_slots: List[str], valid_shift_ids: set[str]) -> List[str]:
+    out: List[str] = []
+    valid_days = set(WEEKDAYS)
+    for item in raw_slots or []:
+        key = str(item or "").strip().upper()
+        if "|" not in key:
+            continue
+        day, shift_id = [p.strip() for p in key.split("|", 1)]
+        if day not in valid_days:
+            continue
+        if shift_id not in valid_shift_ids:
+            continue
+        merged = f"{day}|{shift_id}"
+        if merged not in out:
+            out.append(merged)
+    return out
+
+
 def _normalize_instructor_ids(instrutor_ids: List[str], fallback_instrutor_id: str = "") -> List[str]:
     cleaned: List[str] = []
     for iid in instrutor_ids or []:
@@ -126,6 +184,29 @@ def _parse_json(text: str, default: Any) -> Any:
 
 def _next_id(items: List[Dict[str, Any]]) -> str:
     return next_numeric_id(items)
+
+
+def _next_schedule_offer_id(items: List[Dict[str, Any]], year: int) -> str:
+    highest = 0
+    year_str = str(year)
+    pattern = re.compile(r"^\s*(\d+)\s*/\s*(\d{4})\s*$")
+    for item in items:
+        raw_id = str(item.get("id") or "").strip()
+        match = pattern.match(raw_id)
+        if not match:
+            continue
+        seq_text, item_year = match.groups()
+        if item_year != year_str:
+            continue
+        try:
+            seq = int(seq_text)
+        except ValueError:
+            continue
+        if seq > highest:
+            highest = seq
+    next_seq = highest + 1
+    seq_text = f"{next_seq:02d}" if next_seq < 100 else str(next_seq)
+    return f"{seq_text}/{year_str}"
 
 
 def _parse_days_list(raw: str) -> List[int]:
@@ -697,6 +778,249 @@ def collaborators_list(request: Request, category: str = ""):
 @app.get("/instructors")
 def instructors_redirect():
     return RedirectResponse("/collaborators", status_code=302)
+
+
+def _availability_instructors_context(
+    request: Request,
+    selected_instructor_id: str = "",
+    selected_year: str = "",
+    period_type: str = "month",
+    period_value: str = "",
+    shared_mode: bool = False,
+    shared_token: str = "",
+):
+    instructors = [item for item in list_instructors() if item.get("role") == "Instrutor"]
+    instructors.sort(key=lambda item: (item.get("nome_sobrenome") or item.get("nome") or ""))
+    shifts = list_shifts()
+    shifts.sort(key=lambda item: (item.get("nome") or "", item.get("horario_inicio") or ""))
+
+    selected_instructor_id = str(selected_instructor_id or "").strip()
+    selected_year = str(selected_year or "").strip() or str(datetime.now().year)
+    selected_period_type = str(period_type or "month").strip().lower()
+    period_opts = _availability_period_options(selected_period_type)
+    selected_period_value = str(period_value or "").strip() or period_opts[0]["value"]
+
+    selected_record = None
+    selected_slots: List[str] = []
+    notes = ""
+    share_status = "nao_enviado"
+    share_url = ""
+
+    if selected_instructor_id:
+        try:
+            _ptype, _pvalue = normalize_period(selected_period_type, selected_period_value)
+            selected_period_type = _ptype
+            selected_period_value = _pvalue
+            year_int = _parse_int(selected_year) or datetime.now().year
+            selected_record = get_by_context(
+                selected_instructor_id,
+                year_int,
+                selected_period_type,
+                selected_period_value,
+            )
+            if selected_record:
+                selected_slots = [str(item or "").upper() for item in selected_record.get("slots") or []]
+                notes = str(selected_record.get("notes") or "")
+                share_status = str(selected_record.get("share_status") or "nao_enviado")
+                share_token = str(selected_record.get("share_token") or "").strip()
+                if share_token:
+                    share_url = f"{str(request.base_url).rstrip('/')}/availability/instructors/shared/{share_token}"
+        except ValidationError:
+            pass
+
+    instructor_map = {str(item.get("id")): item for item in instructors}
+    selected_instructor = instructor_map.get(selected_instructor_id)
+
+    return {
+        "instructors": instructors,
+        "shifts": shifts,
+        "weekdays": WEEKDAYS,
+        "selected_instructor_id": selected_instructor_id,
+        "selected_instructor": selected_instructor,
+        "selected_year": selected_year,
+        "selected_period_type": selected_period_type,
+        "selected_period_value": selected_period_value,
+        "period_options": period_opts,
+        "period_type_options": [
+            {"value": "month", "label": "Mês"},
+            {"value": "quarter", "label": "Trimestre"},
+            {"value": "semester", "label": "Semestre"},
+            {"value": "year", "label": "Ano"},
+        ],
+        "selected_period_label": _availability_period_label(selected_period_type, selected_period_value),
+        "selected_slots": set(selected_slots),
+        "notes": notes,
+        "share_status": share_status,
+        "share_url": share_url,
+        "shared_mode": shared_mode,
+        "shared_token": shared_token,
+    }
+
+
+@app.get("/availability/instructors")
+def availability_instructors(
+    request: Request,
+    instructor_id: str = "",
+    year: str = "",
+    period_type: str = "month",
+    period_value: str = "",
+):
+    context = _availability_instructors_context(
+        request,
+        selected_instructor_id=instructor_id,
+        selected_year=year,
+        period_type=period_type,
+        period_value=period_value,
+    )
+    return _render(request, "availability_instructors.html", **context)
+
+
+@app.post("/availability/instructors/save")
+def availability_instructors_save(
+    request: Request,
+    instructor_id: str = Form(""),
+    year: str = Form(""),
+    period_type: str = Form("month"),
+    period_value: str = Form(""),
+    slots: List[str] = Form([]),
+    notes: str = Form(""),
+):
+    instructor_id = str(instructor_id or "").strip()
+    if not instructor_id:
+        _flash(request, "Selecione um instrutor.", "error")
+        return RedirectResponse("/availability/instructors", status_code=303)
+
+    valid_shift_ids = {str(item.get("id") or "").strip() for item in list_shifts()}
+    normalized_slots = _parse_availability_slots(slots, valid_shift_ids)
+    year_int = _parse_int(year) or datetime.now().year
+
+    try:
+        p_type, p_value = normalize_period(period_type, period_value)
+        upsert_record(
+            {
+                "instructor_id": instructor_id,
+                "year": year_int,
+                "period_type": p_type,
+                "period_value": p_value,
+                "slots": normalized_slots,
+                "notes": notes,
+                "updated_by": "Equipe interna",
+            }
+        )
+        _flash(request, "Disponibilidade salva com sucesso.")
+    except ValidationError as exc:
+        _flash(request, str(exc), "error")
+
+    return RedirectResponse(
+        f"/availability/instructors?instructor_id={instructor_id}&year={year_int}&period_type={period_type}&period_value={period_value}",
+        status_code=303,
+    )
+
+
+@app.post("/availability/instructors/share")
+def availability_instructors_share(
+    request: Request,
+    instructor_id: str = Form(""),
+    year: str = Form(""),
+    period_type: str = Form("month"),
+    period_value: str = Form(""),
+):
+    instructor_id = str(instructor_id or "").strip()
+    if not instructor_id:
+        _flash(request, "Selecione um instrutor para gerar o link.", "error")
+        return RedirectResponse("/availability/instructors", status_code=303)
+
+    year_int = _parse_int(year) or datetime.now().year
+    try:
+        p_type, p_value = normalize_period(period_type, period_value)
+        record = get_by_context(instructor_id, year_int, p_type, p_value)
+        if not record:
+            record = upsert_record(
+                {
+                    "instructor_id": instructor_id,
+                    "year": year_int,
+                    "period_type": p_type,
+                    "period_value": p_value,
+                    "slots": [],
+                    "notes": "",
+                    "updated_by": "Equipe interna",
+                }
+            )
+        token = secrets.token_urlsafe(24)
+        updated = create_or_refresh_share_token(str(record.get("id")), token, valid_days=7)
+        share_url = f"{str(request.base_url).rstrip('/')}/availability/instructors/shared/{token}"
+        _flash(request, f"Link gerado: {share_url}", "success")
+        if updated:
+            pass
+    except ValidationError as exc:
+        _flash(request, str(exc), "error")
+
+    return RedirectResponse(
+        f"/availability/instructors?instructor_id={instructor_id}&year={year_int}&period_type={period_type}&period_value={period_value}",
+        status_code=303,
+    )
+
+
+@app.get("/availability/instructors/shared/{token}")
+def availability_instructors_shared(request: Request, token: str):
+    record = find_by_share_token(token)
+    if not record:
+        _flash(request, "Link inválido ou expirado.", "error")
+        return RedirectResponse("/availability/instructors", status_code=302)
+
+    context = _availability_instructors_context(
+        request,
+        selected_instructor_id=str(record.get("instructor_id") or ""),
+        selected_year=str(record.get("year") or ""),
+        period_type=str(record.get("period_type") or "month"),
+        period_value=str(record.get("period_value") or ""),
+        shared_mode=True,
+        shared_token=token,
+    )
+    return _render(request, "availability_instructors.html", **context)
+
+
+@app.post("/availability/instructors/shared/{token}/save")
+def availability_instructors_shared_save(
+    request: Request,
+    token: str,
+    slots: List[str] = Form([]),
+    notes: str = Form(""),
+):
+    record = find_by_share_token(token)
+    if not record:
+        _flash(request, "Link inválido ou expirado.", "error")
+        return RedirectResponse("/availability/instructors", status_code=302)
+
+    instructor_id = str(record.get("instructor_id") or "").strip()
+    year_int = _parse_int(str(record.get("year") or "")) or datetime.now().year
+    period_type = str(record.get("period_type") or "month")
+    period_value = str(record.get("period_value") or "")
+    valid_shift_ids = {str(item.get("id") or "").strip() for item in list_shifts()}
+    normalized_slots = _parse_availability_slots(slots, valid_shift_ids)
+
+    try:
+        upsert_record(
+            {
+                "instructor_id": instructor_id,
+                "year": year_int,
+                "period_type": period_type,
+                "period_value": period_value,
+                "slots": normalized_slots,
+                "notes": notes,
+                "updated_by": "Instrutor (link)",
+                "source": "shared",
+            }
+        )
+        _flash(request, "Disponibilidade enviada com sucesso.", "success")
+    except ValidationError as exc:
+        _flash(request, str(exc), "error")
+    return RedirectResponse(f"/availability/instructors/shared/{token}", status_code=303)
+
+
+@app.get("/availability/rooms")
+def availability_rooms(request: Request):
+    return _render(request, "availability_rooms.html")
 
 
 @app.get("/collaborators/new")
@@ -1663,6 +1987,13 @@ def programming_compute_end_date(
         return JSONResponse({"error": error}, status_code=400)
     return JSONResponse({"end_date": end_date})
 
+
+@app.get("/programming/next-offer-id")
+def programming_next_offer_id(year: str = ""):
+    year_value = _parse_int(year) or datetime.now().year
+    offer_id = _next_schedule_offer_id(list_schedules(), year_value)
+    return JSONResponse({"offer_id": offer_id, "year": year_value})
+
 @app.get("/schedules")
 def schedules_redirect(request: Request):
     query = request.url.query
@@ -1678,14 +2009,18 @@ def schedules_new(request: Request):
     collaborators = list_instructors()
     analysts = [item for item in collaborators if item.get("role") == "Analista"]
     instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
+    assistants = [item for item in collaborators if item.get("role") == "Assistente"]
+    current_year = datetime.now().year
     return _render(
         request,
         "schedule_form.html",
         schedule=None,
-        schedule_id=_next_id(list_schedules()),
+        schedule_id=_next_schedule_offer_id(list_schedules(), current_year),
+        default_year=current_year,
         courses=list_courses(),
         instructors=instructors,
         analysts=analysts,
+        assistants=assistants,
         rooms=list_rooms(),
         shifts=list_shifts(),
         months=MONTHS,
@@ -1705,6 +2040,7 @@ def schedules_create(
     sala_id: str = Form(...),
     qtd_alunos: str = Form(...),
     recurso_tipo: str = Form(""),
+    programa_parceria: str = Form(""),
     data_inicio: str = Form(...),
     data_fim: str = Form(...),
     ch_total: str = Form(...),
@@ -1712,6 +2048,7 @@ def schedules_create(
     hora_inicio: str = Form(...),
     hora_fim: str = Form(...),
     analista_id: str = Form(...),
+    assistente_id: str = Form(""),
     instrutor_id: str = Form(""),
     instrutor_ids: List[str] = Form([]),
     dias_execucao: List[str] = Form([]),
@@ -1734,11 +2071,13 @@ def schedules_create(
         "instrutor_id": selected_instructors[0] if selected_instructors else "",
         "instrutor_ids": selected_instructors,
         "analista_id": analista_id,
+        "assistente_id": assistente_id,
         "sala_id": sala_id,
         "pavimento": floor_value,
         "qtd_alunos": _parse_int(qtd_alunos) or capacity_value,
         "turno_id": turno_id,
         "recurso_tipo": recurso_tipo,
+        "programa_parceria": programa_parceria,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
         "ch_total": _parse_int(ch_total) or ch_value,
@@ -1748,6 +2087,8 @@ def schedules_create(
         "dias_execucao": dias_execucao,
         "observacoes": observacoes,
     }
+    year_for_id = _parse_int(str(payload.get("ano") or "")) or datetime.now().year
+    payload["id"] = _next_schedule_offer_id(list_schedules(), year_for_id)
 
     try:
         if not selected_instructors:
@@ -1778,15 +2119,18 @@ def schedules_create(
         collaborators = list_instructors()
         analysts = [c for c in collaborators if c.get("role") == "Analista"]
         instructors = [c for c in collaborators if c.get("role") == "Instrutor"]
+        assistants = [c for c in collaborators if c.get("role") == "Assistente"]
 
         return _render(
             request,
             "schedule_form.html",
             schedule=payload,
             schedule_id=payload.get("id"),
+            default_year=year_for_id,
             courses=list_courses(),
             instructors=instructors,
             analysts=analysts,
+            assistants=assistants,
             rooms=list_rooms(),
             shifts=list_shifts(),
             months=MONTHS,
@@ -1801,6 +2145,7 @@ def schedules_edit(request: Request, schedule_id: str):
     collaborators = list_instructors()
     analysts = [item for item in collaborators if item.get("role") == "Analista"]
     instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
+    assistants = [item for item in collaborators if item.get("role") == "Assistente"]
     return _render(
         request,
         "schedule_form.html",
@@ -1809,6 +2154,7 @@ def schedules_edit(request: Request, schedule_id: str):
         courses=list_courses(),
         instructors=instructors,
         analysts=analysts,
+        assistants=assistants,
         rooms=list_rooms(),
         shifts=list_shifts(),
         months=MONTHS,
@@ -1828,6 +2174,7 @@ def schedules_update(
     sala_id: str = Form(...),
     qtd_alunos: str = Form(...),
     recurso_tipo: str = Form(""),
+    programa_parceria: str = Form(""),
     data_inicio: str = Form(...),
     data_fim: str = Form(...),
     ch_total: str = Form(...),
@@ -1835,6 +2182,7 @@ def schedules_update(
     hora_inicio: str = Form(...),
     hora_fim: str = Form(...),
     analista_id: str = Form(...),
+    assistente_id: str = Form(""),
     instrutor_id: str = Form(""),
     instrutor_ids: List[str] = Form([]),
     dias_execucao: List[str] = Form([]),
@@ -1854,11 +2202,13 @@ def schedules_update(
         "instrutor_id": selected_instructors[0] if selected_instructors else "",
         "instrutor_ids": selected_instructors,
         "analista_id": analista_id,
+        "assistente_id": assistente_id,
         "sala_id": sala_id,
         "pavimento": floor_value,
         "qtd_alunos": _parse_int(qtd_alunos) or capacity_value,
         "turno_id": turno_id,
         "recurso_tipo": recurso_tipo,
+        "programa_parceria": programa_parceria,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
         "ch_total": _parse_int(ch_total) or ch_value,
@@ -1891,6 +2241,7 @@ def schedules_update(
         collaborators = list_instructors()
         analysts = [item for item in collaborators if item.get("role") == "Analista"]
         instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
+        assistants = [item for item in collaborators if item.get("role") == "Assistente"]
         return _render(
             request,
             "schedule_form.html",
@@ -1899,6 +2250,7 @@ def schedules_update(
             courses=list_courses(),
             instructors=instructors,
             analysts=analysts,
+            assistants=assistants,
             rooms=list_rooms(),
             shifts=list_shifts(),
             months=MONTHS,
@@ -1919,6 +2271,7 @@ def schedules_delete(request: Request, schedule_id: str):
 @app.get("/chronograms")
 def chronograms_list(
     request: Request,
+    id: str = "",
     ano: str = "",
     mes: str = "",
     turno_id: str = "",
@@ -1927,24 +2280,106 @@ def chronograms_list(
     assistente_id: str = "",
 ):
     current_year = str(date.today().year)
+    default_year = "" if id else current_year
     filters = {
-        "ano": ano or current_year,
+        "id": id,
+        "ano": ano or default_year,
         "mes": mes,
         "turno_id": turno_id,
         "instrutor_id": instrutor_id,
         "analista_id": analista_id,
         "assistente_id": assistente_id,
     }
+    items = list_schedules()
+    if id:
+        items = [item for item in items if str(item.get("id", "")).strip() == str(id).strip()]
+    if filters["ano"]:
+        items = [item for item in items if str(item.get("ano", "")) == str(filters["ano"])]
+    if mes:
+        items = [item for item in items if str(item.get("mes", "")) == str(mes)]
+    if turno_id:
+        items = [item for item in items if str(item.get("turno_id", "")) == str(turno_id)]
+    if instrutor_id:
+        filtered: List[Dict[str, Any]] = []
+        for item in items:
+            schedule_instructors = _normalize_instructor_ids(
+                item.get("instrutor_ids") or [],
+                str(item.get("instrutor_id") or ""),
+            )
+            if str(instrutor_id) in schedule_instructors:
+                filtered.append(item)
+        items = filtered
+    if analista_id:
+        items = [item for item in items if str(item.get("analista_id", "")) == str(analista_id)]
+    if assistente_id:
+        items = [item for item in items if str(item.get("assistente_id", "")) == str(assistente_id)]
+
     collaborators = list_instructors()
     instructors = [item for item in collaborators if item.get("role") == "Instrutor"]
     analysts = [item for item in collaborators if item.get("role") == "Analista"]
     assistants = [item for item in collaborators if item.get("role") == "Assistente"]
+    courses = list_courses()
+    shifts = list_shifts()
+    rooms = list_rooms()
+    instructor_map = {
+        item["id"]: item.get("nome_sobrenome") or item.get("nome") or item.get("id")
+        for item in collaborators
+    }
+    course_map = {item["id"]: item.get("nome", item["id"]) for item in courses}
+    shift_map = {item["id"]: item.get("nome", item["id"]) for item in shifts}
+    room_map = {item["id"]: item.get("nome", item["id"]) for item in rooms}
+    month_map = {item["value"]: item["label"] for item in MONTHS}
+
+    rows: List[Dict[str, Any]] = []
+    for item in items:
+        schedule_instructors = _normalize_instructor_ids(
+            item.get("instrutor_ids") or [],
+            str(item.get("instrutor_id") or ""),
+        )
+        instrutores = [instructor_map.get(i, i) for i in schedule_instructors]
+        status_key = str(item.get("chronogram_status") or "").strip().lower()
+        if status_key == "alterado_instrutor":
+            status_label = "Alterado pelo instrutor"
+        elif status_key == "alterado_interno":
+            status_label = "Alterado internamente"
+        else:
+            status_label = "Automático"
+        rows.append(
+            {
+                "id": item.get("id"),
+                "ano": item.get("ano"),
+                "mes_ord": _parse_int(str(item.get("mes") or "")) or 99,
+                "mes_label": month_map.get(str(item.get("mes", "")), str(item.get("mes") or "—")),
+                "curso": course_map.get(item.get("curso_id"), item.get("curso_id") or "—"),
+                "turma": item.get("turma") or "—",
+                "turno": shift_map.get(item.get("turno_id"), item.get("turno_id") or "—"),
+                "ambiente": room_map.get(item.get("sala_id"), item.get("sala_id") or "—"),
+                "instrutor": " / ".join(instrutores) if instrutores else "—",
+                "analista": instructor_map.get(item.get("analista_id"), item.get("analista_id") or "—"),
+                "assistente": instructor_map.get(item.get("assistente_id"), item.get("assistente_id") or "—"),
+                "status": status_label,
+                "updated_at": _format_timestamp_br(item.get("chronogram_updated_at")),
+                "updated_by": item.get("chronogram_updated_by") or "—",
+                "has_share": bool(item.get("chronogram_share_token")),
+            }
+        )
+
+    rows.sort(
+        key=lambda row: (
+            int(_parse_int(str(row.get("ano") or "")) or 0),
+            int(row.get("mes_ord") or 99),
+            str(row.get("turno") or ""),
+            str(row.get("curso") or ""),
+        )
+    )
+
     return _render(
         request,
         "chronograms.html",
+        rows=rows,
         filters=filters,
         months=MONTHS,
-        shifts=list_shifts(),
+        shifts=shifts,
         instructors=instructors,
         analysts=analysts,
         assistants=assistants,
@@ -2038,7 +2473,7 @@ def _distribute_units_over_dates(
             continue
 
         needed_days = int(math.ceil(ch_val / hs_dia))
-        label = "PI" if _is_pi_unit(unit) else f"UC{i}"
+        label = f"UC{i}"
 
         for _ in range(needed_days):
             if idx_date >= len(exec_dates):
@@ -2069,9 +2504,8 @@ def _build_unit_day_sequence(units: List[Dict[str, Any]], slots_per_day: int) ->
             continue
 
         needed_days = int(math.ceil(ch_val / float(slots_per_day)))
-        label = "PI" if _is_pi_unit(unit) else f"UC{i}"
-
-        if label == "PI":
+        label = f"UC{i}"
+        if _is_pi_unit(unit):
             pi_days.extend([label] * needed_days)
         else:
             non_pi_days.extend([label] * needed_days)
@@ -2150,19 +2584,242 @@ def _build_day_instructor_sigla_map(
     return result
 
 
-@app.get("/programming/{schedule_id}/pre-chronogram")
-def pre_chronogram(
-    request: Request,
-    schedule_id: str,
-    layout: str = "portrait",   # portrait | landscape
-    compact: str = "1",         # 1 = compactado, 0 = normal
-):
-    schedule = get_schedule(schedule_id)
-    if not schedule:
-        _flash(request, "ProgramaÃ§Ã£o nÃ£o encontrada.", "error")
-        return RedirectResponse("/programming", status_code=302)
+def _build_uc_catalog(units: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    catalog: List[Dict[str, Any]] = []
+    for idx, unit in enumerate(units, start=1):
+        label = f"UC{idx}"
+        catalog.append(
+            {
+                "label": label,
+                "nome": unit.get("nome") or "",
+                "carga_horaria": unit.get("carga_horaria") or "",
+                "is_pi": _is_pi_unit(unit),
+            }
+        )
+    return catalog
 
-    # entidades
+
+def _build_uc_color_map(uc_catalog: List[Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
+    def _rgb_to_hex(r: float, g: float, b: float) -> str:
+        return "#{:02X}{:02X}{:02X}".format(
+            int(max(0, min(255, round(r * 255)))),
+            int(max(0, min(255, round(g * 255)))),
+            int(max(0, min(255, round(b * 255)))),
+        )
+
+    def _hls_hex(hue_deg: float, light: float, sat: float) -> str:
+        r, g, b = colorsys.hls_to_rgb((hue_deg % 360) / 360.0, light, sat)
+        return _rgb_to_hex(r, g, b)
+
+    def _is_red_hue(hue_deg: float) -> bool:
+        h = hue_deg % 360
+        return h <= 20 or h >= 340
+
+    def _next_non_red_hue(seed: int) -> float:
+        hue = (137.508 * seed) % 360.0
+        while _is_red_hue(hue):
+            hue = (hue + 29.0) % 360.0
+        return hue
+
+    color_map: Dict[str, Dict[str, str]] = {}
+    non_pi_idx = 0
+    for item in uc_catalog:
+        label = str(item.get("label") or "").strip().upper()
+        if not label:
+            continue
+        is_pi = bool(item.get("is_pi"))
+        if is_pi:
+            color_map[label] = {"bg": "#FEE2E2", "border": "#FCA5A5", "text": "#991B1B"}
+            continue
+
+        cycle = non_pi_idx // 18
+        hue = _next_non_red_hue(non_pi_idx + cycle * 3 + 1)
+        sat = max(0.45, 0.70 - (cycle * 0.06))
+        bg_light = min(0.92, 0.90 + (cycle * 0.01))
+        border_light = min(0.80, 0.74 + (cycle * 0.015))
+        text_light = max(0.24, 0.28 - (cycle * 0.01))
+        color_map[label] = {
+            "bg": _hls_hex(hue, bg_light, sat),
+            "border": _hls_hex(hue, border_light, sat),
+            "text": _hls_hex(hue, text_light, min(0.85, sat + 0.08)),
+        }
+        non_pi_idx += 1
+    return color_map
+
+
+def _normalize_day_uc_map(
+    exec_dates: List[date],
+    raw_map: Any,
+    allowed_labels: set[str],
+) -> Dict[str, str]:
+    if not isinstance(raw_map, dict):
+        return {}
+    valid_keys = {d.isoformat() for d in exec_dates}
+    normalized: Dict[str, str] = {}
+    for key, value in raw_map.items():
+        date_key = str(key or "").strip()
+        label = str(value or "").strip().upper()
+        if date_key not in valid_keys:
+            continue
+        if label and label not in allowed_labels:
+            continue
+        normalized[date_key] = label
+    return normalized
+
+
+def _slot_key(day: date, slot_idx: int) -> str:
+    return f"{day.isoformat()}#{slot_idx}"
+
+
+def _normalize_slot_uc_map(
+    exec_dates: List[date],
+    slots_per_day: int,
+    raw_map: Any,
+    allowed_labels: set[str],
+) -> Dict[str, str]:
+    if not isinstance(raw_map, dict) or slots_per_day <= 0:
+        return {}
+    valid_keys = {_slot_key(d, idx) for d in exec_dates for idx in range(slots_per_day)}
+    normalized: Dict[str, str] = {}
+    for key, value in raw_map.items():
+        map_key = str(key or "").strip()
+        label = str(value or "").strip().upper()
+        if map_key not in valid_keys:
+            continue
+        if label and label not in allowed_labels:
+            continue
+        normalized[map_key] = label
+    return normalized
+
+
+def _build_slot_uc_map_from_day_map(
+    exec_dates: List[date],
+    slots_per_day: int,
+    day_uc_map: Dict[str, str],
+) -> Dict[str, str]:
+    if slots_per_day <= 0:
+        return {}
+    slot_map: Dict[str, str] = {}
+    for day in exec_dates:
+        label = str(day_uc_map.get(day.isoformat(), "") or "").strip().upper()
+        for idx in range(slots_per_day):
+            slot_map[_slot_key(day, idx)] = label
+    return slot_map
+
+
+def _build_day_map_from_slot_map(
+    exec_dates: List[date],
+    slots_per_day: int,
+    slot_uc_map: Dict[str, str],
+) -> Dict[str, str]:
+    day_map: Dict[str, str] = {}
+    for day in exec_dates:
+        picked = ""
+        for idx in range(slots_per_day):
+            value = str(slot_uc_map.get(_slot_key(day, idx), "") or "").strip().upper()
+            if value:
+                picked = value
+                break
+        day_map[day.isoformat()] = picked
+    return day_map
+
+
+def _build_auto_slot_uc_map(
+    exec_dates: List[date],
+    slots_per_day: int,
+    uc_catalog: List[Dict[str, Any]],
+) -> Dict[str, str]:
+    if slots_per_day <= 0:
+        return {}
+
+    slot_map: Dict[str, str] = {}
+
+    def _unit_chunks(label: str, needed: int) -> List[List[str]]:
+        chunks: List[List[str]] = []
+        remaining = max(0, needed)
+        while remaining > 0:
+            take = min(slots_per_day, remaining)
+            chunks.append([label] * take)
+            remaining -= take
+        return chunks
+
+    normal_chunks: List[List[str]] = []
+    pi_chunks: List[List[str]] = []
+    for item in uc_catalog:
+        label = str(item.get("label") or "").strip().upper()
+        if not label:
+            continue
+        ch = _parse_hours_value(item.get("carga_horaria"))
+        needed = max(0, int(math.ceil(float(ch)))) if ch is not None else 0
+        if needed <= 0:
+            continue
+        chunks = _unit_chunks(label, needed)
+        if bool(item.get("is_pi")):
+            pi_chunks.extend(chunks)
+        else:
+            normal_chunks.extend(chunks)
+
+    def _insert_chunks_spread(base: List[List[str]], to_insert: List[List[str]]) -> List[List[str]]:
+        if not to_insert:
+            return list(base)
+        if not base:
+            return list(to_insert)
+        out = list(base)
+        base_len = len(base)
+        inserted = 0
+        for i, chunk in enumerate(to_insert):
+            # Espalha do inicio ao fim sem concentrar no fim.
+            gap = int(round((i + 1) * (base_len + 1) / float(len(to_insert) + 1)))
+            gap = max(1, min(base_len, gap))
+            pos = min(len(out), max(1, gap + inserted))
+            out.insert(pos, chunk)
+            inserted += 1
+        return out
+
+    pi_full_chunks = [chunk for chunk in pi_chunks if len(chunk) >= slots_per_day]
+    pi_partial_chunks = [chunk for chunk in pi_chunks if len(chunk) < slots_per_day]
+
+    mixed_chunks = _insert_chunks_spread(normal_chunks, pi_full_chunks)
+    mixed_chunks = _insert_chunks_spread(mixed_chunks, pi_partial_chunks)
+
+    packed_days: List[List[str]] = []
+    current_day: List[str] = []
+    for chunk in mixed_chunks:
+        if not chunk:
+            continue
+        pending = list(chunk)
+
+        # Preserva blocos de dia inteiro sempre que possivel.
+        if len(pending) == slots_per_day and current_day:
+            packed_days.append(current_day)
+            current_day = []
+
+        while pending:
+            free_slots = slots_per_day - len(current_day)
+            take = min(free_slots, len(pending))
+            current_day.extend(pending[:take])
+            pending = pending[take:]
+            if len(current_day) == slots_per_day:
+                packed_days.append(current_day)
+                current_day = []
+    if current_day:
+        packed_days.append(current_day)
+
+    for day_idx, day in enumerate(exec_dates):
+        values = packed_days[day_idx] if day_idx < len(packed_days) else []
+        for slot_idx in range(slots_per_day):
+            slot_map[_slot_key(day, slot_idx)] = values[slot_idx] if slot_idx < len(values) else ""
+
+    return slot_map
+
+
+def _build_chronogram_data(
+    schedule: Dict[str, Any],
+    use_saved_distribution: bool = True,
+) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    if not schedule:
+        return None, "Programação não encontrada."
+
     course = get_course(schedule.get("curso_id"))
     schedule_instructor_ids = _normalize_instructor_ids(
         schedule.get("instrutor_ids") or [],
@@ -2175,12 +2832,10 @@ def pre_chronogram(
     shift = get_shift(schedule.get("turno_id"))
     room = get_room(schedule.get("sala_id"))
 
-    # datas
     start_date = _parse_date_br(schedule.get("data_inicio") or "")
     end_date = _parse_date_br(schedule.get("data_fim") or "")
     if not start_date or not end_date:
-        _flash(request, "Datas invÃ¡lidas para gerar prÃ©-cronograma.", "error")
-        return RedirectResponse("/programming", status_code=302)
+        return None, "Datas inválidas para gerar pré-cronograma."
 
     year_value = _parse_int(str(schedule.get("ano") or start_date.year)) or start_date.year
     calendario = get_calendar(year_value) or {}
@@ -2189,20 +2844,16 @@ def pre_chronogram(
 
     selected_weekdays = _weekday_set_from_execucao(schedule.get("dias_execucao") or [])
     if not selected_weekdays:
-        _flash(request, "Dias de execuÃ§Ã£o nÃ£o definidos.", "error")
-        return RedirectResponse("/programming", status_code=302)
+        return None, "Dias de execução não definidos."
 
-    # hs_dia
     hs_dia = _calc_hs_dia_from_shift(shift)
     if hs_dia <= 0:
-        # ainda dÃ¡ pra mostrar, mas sem distribuiÃ§Ã£o por carga horÃ¡ria
         hs_dia = 0.0
     hour_slots = _build_hour_slots(schedule.get("hora_inicio") or "", schedule.get("hora_fim") or "")
     slots_per_day = len(hour_slots)
     if slots_per_day <= 0 and hs_dia > 0:
         slots_per_day = max(1, int(round(hs_dia)))
 
-    # monta lista de datas executÃ¡veis (seg-sab, conforme dias_execucao + letivos)
     exec_dates: List[date] = []
     cur = start_date
     while cur <= end_date:
@@ -2212,18 +2863,61 @@ def pre_chronogram(
                 exec_dates.append(cur)
         cur += timedelta(days=1)
 
-    # UCs
     units = _get_course_units_for_pre(schedule.get("curso_id") or "")
+    uc_catalog = _build_uc_catalog(units)
+    uc_color_map = _build_uc_color_map(uc_catalog)
+    allowed_labels = {item["label"] for item in uc_catalog}
 
-    # distribui UCs por dia (mantem o mesmo label em todos os horarios do dia, quando possivel)
-    day_uc_map = _map_dates_to_uc_label(exec_dates, units, slots_per_day) if slots_per_day > 0 else {}
+    auto_slot_uc_map = _build_auto_slot_uc_map(exec_dates, slots_per_day, uc_catalog)
+    auto_day_uc_map = _build_day_map_from_slot_map(exec_dates, slots_per_day, auto_slot_uc_map)
+    saved_day_uc_map = {}
+    if use_saved_distribution:
+        saved_day_uc_map = _normalize_day_uc_map(
+            exec_dates,
+            schedule.get("chronogram_day_uc_map") or {},
+            allowed_labels,
+        )
+    day_uc_map = saved_day_uc_map if saved_day_uc_map else auto_day_uc_map
+    if not day_uc_map:
+        day_uc_map = {d.isoformat(): "" for d in exec_dates}
+    if not auto_slot_uc_map:
+        auto_slot_uc_map = _build_slot_uc_map_from_day_map(exec_dates, slots_per_day, day_uc_map)
+    saved_slot_uc_map = {}
+    if use_saved_distribution:
+        saved_slot_uc_map = _normalize_slot_uc_map(
+            exec_dates,
+            slots_per_day,
+            schedule.get("chronogram_slot_uc_map") or {},
+            allowed_labels,
+        )
+    slot_uc_map = saved_slot_uc_map if saved_slot_uc_map else auto_slot_uc_map
+    if not slot_uc_map:
+        slot_uc_map = auto_slot_uc_map
+    if slots_per_day > 0:
+        day_uc_map = _build_day_map_from_slot_map(exec_dates, slots_per_day, slot_uc_map)
+
     instructor_names = [
         (item.get("nome") or item.get("nome_sobrenome") or "")
         for item in instructor_items
     ]
-    day_instrutor_map = _build_day_instructor_sigla_map(exec_dates, day_uc_map, instructor_names)
+    instructor_siglas: List[str] = []
+    for name in instructor_names:
+        sigla = _sigla_nome(name)
+        if sigla and sigla not in instructor_siglas:
+            instructor_siglas.append(sigla)
 
-    # agrupa por mÃªs (somente meses do intervalo)
+    auto_day_instrutor_map = _build_day_instructor_sigla_map(exec_dates, day_uc_map, instructor_names)
+    saved_day_instrutor_map = {}
+    if use_saved_distribution and instructor_siglas:
+        saved_day_instrutor_map = _normalize_day_uc_map(
+            exec_dates,
+            schedule.get("chronogram_day_instrutor_map") or {},
+            set(instructor_siglas),
+        )
+    day_instrutor_map = saved_day_instrutor_map if saved_day_instrutor_map else auto_day_instrutor_map
+    if not day_instrutor_map:
+        day_instrutor_map = {d.isoformat(): "" for d in exec_dates}
+
     months_data: List[Dict[str, Any]] = []
     month_cursor = date(start_date.year, start_date.month, 1)
     end_month = date(end_date.year, end_date.month, 1)
@@ -2231,16 +2925,12 @@ def pre_chronogram(
     while month_cursor <= end_month:
         y = month_cursor.year
         m = month_cursor.month
-        label = next((x["label"] for x in MONTHS if int(x["value"]) == m), f"M\u00eas {m}")
-
-        # colunas = dias Ãºteis (SEG-SÃB) que estÃ£o na lista exec_dates e sÃ£o deste mÃªs
+        label = next((x["label"] for x in MONTHS if int(x["value"]) == m), f"Mês {m}")
         month_exec = [d for d in exec_dates if d.year == y and d.month == m]
-
         letivos_count = len(month_exec)
         letivos_text = (
             f"{letivos_count} DIA LETIVO" if letivos_count == 1 else f"{letivos_count} DIAS LETIVOS"
         )
-
         months_data.append(
             {
                 "year": y,
@@ -2252,47 +2942,481 @@ def pre_chronogram(
             }
         )
 
-        # prÃ³ximo mÃªs
         if m == 12:
             month_cursor = date(y + 1, 1, 1)
         else:
             month_cursor = date(y, m + 1, 1)
 
     header = {
-        "curso": course.get("nome") if course else "â€”",
-        "tipo": course.get("tipo_curso") if course else "â€”",
-        "ch_total": course.get("carga_horaria_total") if course else schedule.get("ch_total") or "â€”",
-        "turma": schedule.get("turma") or "â€”",
+        "curso": course.get("nome") if course else "—",
+        "tipo": course.get("tipo_curso") if course else "—",
+        "ch_total": course.get("carga_horaria_total") if course else schedule.get("ch_total") or "—",
+        "turma": schedule.get("turma") or "—",
         "instrutor": (
             ", ".join(
                 [(item.get("nome_sobrenome") or item.get("nome") or "—") for item in instructor_items]
             )
             if instructor_items
-            else "â€”"
+            else "—"
         ),
-        "analista": (analyst.get("nome_sobrenome") or analyst.get("nome")) if analyst else "â€”",
-        "ambiente": room.get("nome") if room else "â€”",
-        "pavimento": schedule.get("pavimento") or (room.get("pavimento") if room else "â€”"),
-        "periodo": f"{schedule.get('data_inicio') or 'â€”'} a {schedule.get('data_fim') or 'â€”'}",
-        "horario": f"{schedule.get('hora_inicio') or 'â€”'} Ã s {schedule.get('hora_fim') or 'â€”'}",
+        "analista": (analyst.get("nome_sobrenome") or analyst.get("nome")) if analyst else "—",
+        "ambiente": room.get("nome") if room else "—",
+        "pavimento": schedule.get("pavimento") or (room.get("pavimento") if room else "—"),
+        "periodo": f"{schedule.get('data_inicio') or '—'} a {schedule.get('data_fim') or '—'}",
+        "horario": f"{schedule.get('hora_inicio') or '—'} às {schedule.get('hora_fim') or '—'}",
         "dias": ", ".join(schedule.get("dias_execucao") or []),
-        "turno": shift.get("nome") if shift else "â€”",
-        "hs_dia": f"{hs_dia:.2f}".replace(".00", "") if hs_dia else "â€”",
+        "turno": shift.get("nome") if shift else "—",
+        "hs_dia": f"{hs_dia:.2f}".replace(".00", "") if hs_dia else "—",
+        "recurso": schedule.get("recurso_tipo") or "—",
+        "programa_parceria": schedule.get("programa_parceria") or "—",
     }
     header["instrutor_sigla"] = _sigla_nome(
         (instructor.get("nome") or instructor.get("nome_sobrenome") or "") if instructor else ""
-    ) or "â€”"
+    ) or "—"
+
+    return (
+        {
+            "header": header,
+            "layout_data": months_data,
+            "hour_slots": hour_slots,
+            "units": units,
+            "uc_catalog": uc_catalog,
+            "uc_color_map": uc_color_map,
+            "instructor_siglas": instructor_siglas,
+            "pi_labels": [item["label"] for item in uc_catalog if item.get("is_pi")],
+            "day_uc_map": day_uc_map,
+            "slot_uc_map": slot_uc_map,
+            "day_instrutor_map": day_instrutor_map,
+            "exec_dates": exec_dates,
+            "slots_per_day": slots_per_day,
+            "day_sequence": [day_uc_map.get(d.isoformat(), "") for d in exec_dates],
+            "slot_sequence": [
+                slot_uc_map.get(_slot_key(d, idx), "")
+                for d in exec_dates
+                for idx in range(slots_per_day)
+            ],
+            "instructor_sequence": [day_instrutor_map.get(d.isoformat(), "") for d in exec_dates],
+        },
+        None,
+    )
+
+
+def _parse_day_sequence(raw: str) -> List[str]:
+    text = (raw or "").strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return [str(item or "").strip().upper() for item in parsed]
+    except json.JSONDecodeError:
+        pass
+    return [item.strip().upper() for item in text.split(",")]
+
+
+def _expected_uc_slot_counts(uc_catalog: List[Dict[str, Any]]) -> Dict[str, int]:
+    expected: Dict[str, int] = {}
+    for item in uc_catalog:
+        label = str(item.get("label") or "").strip().upper()
+        if not label:
+            continue
+        ch = _parse_hours_value(item.get("carga_horaria"))
+        if ch is None:
+            expected[label] = 0
+            continue
+        expected[label] = max(0, int(math.ceil(float(ch))))
+    return expected
+
+
+def _format_timestamp_br(raw: Any) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(text)
+        return dt.strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return text
+
+
+def _find_schedule_by_share_token(token: str) -> Optional[Dict[str, Any]]:
+    key = (token or "").strip()
+    if not key:
+        return None
+    for item in list_schedules():
+        if str(item.get("chronogram_share_token") or "") == key:
+            return item
+    return None
+
+
+def _save_chronogram_distribution(
+    schedule_id: str,
+    slot_sequence_raw: str,
+    instructor_sequence_raw: str,
+    updated_by: str,
+    mark_instrutor: bool,
+) -> tuple[bool, str]:
+    schedule = get_schedule(schedule_id)
+    if not schedule:
+        return False, "Programação não encontrada."
+
+    chronogram_data, error = _build_chronogram_data(schedule, use_saved_distribution=False)
+    if error or not chronogram_data:
+        return False, error or "Não foi possível carregar os dados do cronograma."
+
+    labels = _parse_day_sequence(slot_sequence_raw)
+    exec_dates = chronogram_data["exec_dates"]
+    slots_per_day = int(chronogram_data.get("slots_per_day") or 0)
+    allowed = {item["label"] for item in chronogram_data["uc_catalog"]}
+    expected_slots = max(0, len(exec_dates) * slots_per_day)
+    normalized: List[str] = []
+    for idx in range(expected_slots):
+        label = labels[idx] if idx < len(labels) else ""
+        if label not in allowed:
+            label = ""
+        normalized.append(label)
+    slot_map: Dict[str, str] = {}
+    cursor = 0
+    for d in exec_dates:
+        for slot_idx in range(slots_per_day):
+            slot_map[_slot_key(d, slot_idx)] = normalized[cursor] if cursor < len(normalized) else ""
+            cursor += 1
+    chronogram_map = _build_day_map_from_slot_map(exec_dates, slots_per_day, slot_map)
+
+    expected_counts = _expected_uc_slot_counts(chronogram_data.get("uc_catalog") or [])
+    actual_counts: Dict[str, int] = {label: 0 for label in expected_counts}
+    for label in normalized:
+        if label in actual_counts:
+            actual_counts[label] += 1
+
+    mismatches: List[str] = []
+    for label, expected in expected_counts.items():
+        actual = actual_counts.get(label, 0)
+        if actual != expected:
+            mismatches.append(f"{label}: esperado {expected}h, distribuído {actual}h")
+    if mismatches:
+        return (
+            False,
+            "Distribuição inválida. Ajuste a carga horária das UCs: " + "; ".join(mismatches),
+        )
+    instructor_labels = _parse_day_sequence(instructor_sequence_raw)
+    allowed_instructors = set(chronogram_data.get("instructor_siglas") or [])
+    normalized_instructors: List[str] = []
+    for idx, _ in enumerate(exec_dates):
+        label = instructor_labels[idx] if idx < len(instructor_labels) else ""
+        if label and label not in allowed_instructors:
+            label = ""
+        normalized_instructors.append(label)
+    chronogram_instrutor_map = {
+        d.isoformat(): normalized_instructors[idx]
+        for idx, d in enumerate(exec_dates)
+    }
+
+    updates = {
+        "chronogram_slot_uc_map": slot_map,
+        "chronogram_day_uc_map": chronogram_map,
+        "chronogram_day_instrutor_map": chronogram_instrutor_map,
+        "chronogram_updated_by": updated_by,
+        "chronogram_updated_at": datetime.now().isoformat(timespec="seconds"),
+        "chronogram_status": "alterado_instrutor" if mark_instrutor else "alterado_interno",
+    }
+    try:
+        update_schedule(schedule_id, updates)
+        return True, "Cronograma atualizado com sucesso."
+    except ValidationError as exc:
+        return False, str(exc)
+
+
+def _apply_chronogram_operation(
+    schedule_id: str,
+    operation: str,
+    updated_by: str,
+    mark_instrutor: bool,
+) -> tuple[bool, str]:
+    schedule = get_schedule(schedule_id)
+    if not schedule:
+        return False, "Programação não encontrada."
+
+    chrono_auto, error = _build_chronogram_data(schedule, use_saved_distribution=False)
+    if error or not chrono_auto:
+        return False, error or "Não foi possível carregar o cronograma."
+
+    exec_dates = chrono_auto["exec_dates"]
+    slots_per_day = int(chrono_auto.get("slots_per_day") or 0)
+    updated_status = "alterado_instrutor" if mark_instrutor else "alterado_interno"
+
+    if operation == "reset_ucs":
+        slot_map: Dict[str, str] = {}
+        for d in exec_dates:
+            for slot_idx in range(slots_per_day):
+                slot_map[_slot_key(d, slot_idx)] = ""
+        day_uc_map = _build_day_map_from_slot_map(exec_dates, slots_per_day, slot_map)
+        updates = {
+            "chronogram_slot_uc_map": slot_map,
+            "chronogram_day_uc_map": day_uc_map,
+            "chronogram_updated_by": updated_by,
+            "chronogram_updated_at": datetime.now().isoformat(timespec="seconds"),
+            "chronogram_status": updated_status,
+        }
+        try:
+            update_schedule(schedule_id, updates)
+            return True, "UCs zeradas com sucesso."
+        except ValidationError as exc:
+            return False, str(exc)
+
+    if operation == "restore_default":
+        updates = {
+            "chronogram_slot_uc_map": chrono_auto.get("slot_uc_map") or {},
+            "chronogram_day_uc_map": chrono_auto.get("day_uc_map") or {},
+            "chronogram_day_instrutor_map": chrono_auto.get("day_instrutor_map") or {},
+            "chronogram_updated_by": updated_by,
+            "chronogram_updated_at": datetime.now().isoformat(timespec="seconds"),
+            "chronogram_status": updated_status,
+        }
+        try:
+            update_schedule(schedule_id, updates)
+            return True, "Distribuição padrão restaurada."
+        except ValidationError as exc:
+            return False, str(exc)
+
+    return False, "Operação inválida."
+
+
+@app.get("/chronograms/{schedule_id}/edit")
+def chronogram_edit(request: Request, schedule_id: str):
+    schedule = get_schedule(schedule_id)
+    if not schedule:
+        _flash(request, "Programação não encontrada.", "error")
+        return RedirectResponse("/chronograms", status_code=302)
+
+    chronogram_data, error = _build_chronogram_data(schedule, use_saved_distribution=True)
+    if error or not chronogram_data:
+        _flash(request, error or "Não foi possível montar o cronograma.", "error")
+        return RedirectResponse("/chronograms", status_code=302)
+
+    share_token = str(schedule.get("chronogram_share_token") or "").strip()
+    share_url = (
+        f"{str(request.base_url).rstrip('/')}/chronograms/shared/{share_token}"
+        if share_token
+        else ""
+    )
+    return _render(
+        request,
+        "chronogram_editor.html",
+        schedule=schedule,
+        header=chronogram_data["header"],
+        months_data=chronogram_data["layout_data"],
+        hour_slots=chronogram_data["hour_slots"],
+        slots_per_day=chronogram_data["slots_per_day"],
+        day_uc_map=chronogram_data["day_uc_map"],
+        slot_uc_map=chronogram_data["slot_uc_map"],
+        day_instrutor_map=chronogram_data["day_instrutor_map"],
+        units=chronogram_data["units"],
+        uc_catalog=chronogram_data["uc_catalog"],
+        uc_color_map=chronogram_data["uc_color_map"],
+        pi_labels=chronogram_data["pi_labels"],
+        instructor_siglas=chronogram_data["instructor_siglas"],
+        share_url=share_url,
+        shared_mode=False,
+    )
+
+
+@app.post("/chronograms/{schedule_id}/edit")
+def chronogram_edit_save(
+    request: Request,
+    schedule_id: str,
+    slot_sequence: str = Form(""),
+    instructor_sequence: str = Form(""),
+    operation: str = Form("save"),
+):
+    if operation in {"reset_ucs", "restore_default"}:
+        ok, message = _apply_chronogram_operation(
+            schedule_id=schedule_id,
+            operation=operation,
+            updated_by="Equipe interna",
+            mark_instrutor=False,
+        )
+        _flash(request, message, "success" if ok else "error")
+        return RedirectResponse(f"/chronograms/{schedule_id}/edit", status_code=303)
+
+    ok, message = _save_chronogram_distribution(
+        schedule_id=schedule_id,
+        slot_sequence_raw=slot_sequence,
+        instructor_sequence_raw=instructor_sequence,
+        updated_by="Equipe interna",
+        mark_instrutor=False,
+    )
+    _flash(request, message, "success" if ok else "error")
+    return RedirectResponse(f"/chronograms/{schedule_id}/edit", status_code=303)
+
+
+@app.post("/chronograms/{schedule_id}/share")
+def chronogram_share_link(request: Request, schedule_id: str):
+    schedule = get_schedule(schedule_id)
+    if not schedule:
+        _flash(request, "Programação não encontrada.", "error")
+        return RedirectResponse("/chronograms", status_code=302)
+
+    token = secrets.token_urlsafe(24)
+    try:
+        update_schedule(
+            schedule_id,
+            {
+                "chronogram_share_token": token,
+                "chronogram_share_created_at": datetime.now().isoformat(timespec="seconds"),
+            },
+        )
+    except ValidationError as exc:
+        _flash(request, str(exc), "error")
+        return RedirectResponse(f"/chronograms/{schedule_id}/edit", status_code=303)
+    share_url = f"{str(request.base_url).rstrip('/')}/chronograms/shared/{token}"
+    _flash(request, f"Link de edição gerado: {share_url}", "success")
+    return RedirectResponse(f"/chronograms/{schedule_id}/edit", status_code=303)
+
+
+@app.get("/chronograms/shared/{token}")
+def chronogram_shared_edit(request: Request, token: str):
+    schedule = _find_schedule_by_share_token(token)
+    if not schedule:
+        _flash(request, "Link de cronograma inválido ou expirado.", "error")
+        return RedirectResponse("/chronograms", status_code=302)
+
+    chronogram_data, error = _build_chronogram_data(schedule, use_saved_distribution=True)
+    if error or not chronogram_data:
+        _flash(request, error or "Não foi possível montar o cronograma.", "error")
+        return RedirectResponse("/chronograms", status_code=302)
+
+    return _render(
+        request,
+        "chronogram_editor.html",
+        schedule=schedule,
+        header=chronogram_data["header"],
+        months_data=chronogram_data["layout_data"],
+        hour_slots=chronogram_data["hour_slots"],
+        slots_per_day=chronogram_data["slots_per_day"],
+        day_uc_map=chronogram_data["day_uc_map"],
+        slot_uc_map=chronogram_data["slot_uc_map"],
+        day_instrutor_map=chronogram_data["day_instrutor_map"],
+        units=chronogram_data["units"],
+        uc_catalog=chronogram_data["uc_catalog"],
+        uc_color_map=chronogram_data["uc_color_map"],
+        pi_labels=chronogram_data["pi_labels"],
+        instructor_siglas=chronogram_data["instructor_siglas"],
+        share_url="",
+        shared_mode=True,
+        shared_token=token,
+    )
+
+
+@app.post("/chronograms/shared/{token}/save")
+def chronogram_shared_save(
+    request: Request,
+    token: str,
+    slot_sequence: str = Form(""),
+    instructor_sequence: str = Form(""),
+    operation: str = Form("save"),
+):
+    schedule = _find_schedule_by_share_token(token)
+    if not schedule:
+        _flash(request, "Link de cronograma inválido ou expirado.", "error")
+        return RedirectResponse("/chronograms", status_code=302)
+
+    if operation in {"reset_ucs", "restore_default"}:
+        ok, message = _apply_chronogram_operation(
+            schedule_id=str(schedule.get("id")),
+            operation=operation,
+            updated_by="Instrutor (link)",
+            mark_instrutor=True,
+        )
+        _flash(request, message, "success" if ok else "error")
+        return RedirectResponse(f"/chronograms/shared/{token}", status_code=303)
+
+    ok, message = _save_chronogram_distribution(
+        schedule_id=str(schedule.get("id")),
+        slot_sequence_raw=slot_sequence,
+        instructor_sequence_raw=instructor_sequence,
+        updated_by="Instrutor (link)",
+        mark_instrutor=True,
+    )
+    _flash(request, message, "success" if ok else "error")
+    return RedirectResponse(f"/chronograms/shared/{token}", status_code=303)
+
+
+@app.get("/programming/{schedule_id}/pre-chronogram")
+def pre_chronogram(
+    request: Request,
+    schedule_id: str,
+    layout: str = "portrait",   # portrait | landscape
+    compact: str = "1",         # 1 = compactado, 0 = normal
+):
+    schedule = get_schedule(schedule_id)
+    if not schedule:
+        _flash(request, "Programação não encontrada.", "error")
+        return RedirectResponse("/programming", status_code=302)
+    chronogram_data, error = _build_chronogram_data(schedule, use_saved_distribution=True)
+    if error or not chronogram_data:
+        _flash(request, error or "Não foi possível montar o pré-cronograma.", "error")
+        return RedirectResponse("/programming", status_code=302)
 
     return _render(
         request,
         "pre_chronogram.html",
         schedule=schedule,
-        header=header,
+        header=chronogram_data["header"],
+        sheet_title="PRE-CRONOGRAMA",
         layout="landscape" if layout == "landscape" else "portrait",
         compact=(compact != "0"),
-        months_data=months_data,
-        hour_slots=hour_slots,
-        units=units,
-        day_uc_map=day_uc_map,
-        day_instrutor_map=day_instrutor_map,
+        months_data=chronogram_data["layout_data"],
+        hour_slots=chronogram_data["hour_slots"],
+        units=chronogram_data["units"],
+        day_uc_map=chronogram_data["day_uc_map"],
+        slot_uc_map=chronogram_data["slot_uc_map"],
+        day_instrutor_map=chronogram_data["day_instrutor_map"],
+        uc_color_map=chronogram_data["uc_color_map"],
+        pi_labels=chronogram_data["pi_labels"],
+    )
+
+
+@app.get("/programming/{schedule_id}/empty-chronogram")
+def empty_chronogram(
+    request: Request,
+    schedule_id: str,
+    layout: str = "portrait",
+    compact: str = "1",
+):
+    schedule = get_schedule(schedule_id)
+    if not schedule:
+        _flash(request, "Programação não encontrada.", "error")
+        return RedirectResponse("/programming", status_code=302)
+
+    chronogram_data, error = _build_chronogram_data(schedule, use_saved_distribution=True)
+    if error or not chronogram_data:
+        _flash(request, error or "Não foi possível montar o cronograma vazio.", "error")
+        return RedirectResponse("/programming", status_code=302)
+
+    exec_dates = chronogram_data.get("exec_dates") or []
+    slots_per_day = int(chronogram_data.get("slots_per_day") or 0)
+    empty_slot_map: Dict[str, str] = {}
+    for d in exec_dates:
+        for idx in range(slots_per_day):
+            empty_slot_map[_slot_key(d, idx)] = ""
+
+    empty_day_map = {d.isoformat(): "" for d in exec_dates}
+
+    return _render(
+        request,
+        "pre_chronogram.html",
+        schedule=schedule,
+        header=chronogram_data["header"],
+        sheet_title="CRONOGRAMA VAZIO",
+        layout="landscape" if layout == "landscape" else "portrait",
+        compact=(compact != "0"),
+        months_data=chronogram_data["layout_data"],
+        hour_slots=chronogram_data["hour_slots"],
+        units=chronogram_data["units"],
+        day_uc_map=empty_day_map,
+        slot_uc_map=empty_slot_map,
+        day_instrutor_map=chronogram_data["day_instrutor_map"],
+        uc_color_map=chronogram_data["uc_color_map"],
+        pi_labels=chronogram_data["pi_labels"],
     )

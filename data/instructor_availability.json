@@ -1,0 +1,18 @@
+{
+  "items": [
+    {
+      "id": "3|2026|quarter|1",
+      "instructor_id": "3",
+      "year": 2026,
+      "period_type": "quarter",
+      "period_value": "1",
+      "slots": [],
+      "notes": "",
+      "updated_at": "2026-02-16T03:24:04",
+      "updated_by": "Equipe interna",
+      "share_token": "7wq2X9eOGMImEwW6jnpRlZ8OXBxYquIA",
+      "share_expires_at": "2026-02-23T03:24:49",
+      "share_status": "enviado"
+    }
+  ]
+}

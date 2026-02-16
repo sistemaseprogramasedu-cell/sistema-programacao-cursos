@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set title = "Pre-cronograma" %}
+{% set title = sheet_title if sheet_title else "Pre-cronograma" %}
 {% block content %}
 
 <div class="print-page">
@@ -26,7 +26,10 @@
         </div>
       </div>
 
-      <div class="chrono-title">PRE-CRONOGRAMA</div>
+      <div class="chrono-title-row">
+        <div class="chrono-title">{{ sheet_title if sheet_title else "PRE-CRONOGRAMA" }}</div>
+        <div class="chrono-offer-id">ID Oferta: {{ schedule.id }}</div>
+      </div>
 
       <div class="info-grid">
         <div><span>Curso:</span> {{ header.curso }}</div>
@@ -46,7 +49,8 @@
         <div><span>Dias:</span> {{ header.dias }}</div>
 
         <div><span>Horario:</span> {{ header.horario }}</div>
-        <div><span>ID Oferta:</span> {{ schedule.id }}</div>
+        <div><span>Recurso:</span> {{ header.recurso }}</div>
+        <div><span>Programa/Parceria:</span> {{ header.programa_parceria }}</div>
       </div>
     </div>
 
@@ -73,12 +77,20 @@
 
           {% if hour_slots %}
             {% for slot in hour_slots %}
+              {% set slot_idx = loop.index0 %}
               <div class="chrono-row">
                 <div class="tcell time-col">{{ slot.label }}</div>
                 {% for d in month.dates %}
                   {% set key = d.isoformat() %}
-                  {% set day_label = day_uc_map.get(key, "") %}
-                  <div class="tcell uc-cell {{ 'uc-pi' if day_label == 'PI' else '' }}">{{ day_label }}</div>
+                  {% set slot_key = key ~ '#' ~ slot_idx %}
+                  {% set day_label = slot_uc_map.get(slot_key, "") %}
+                  {% set uc_color = uc_color_map.get(day_label, {}) %}
+                  <div
+                    class="tcell uc-cell uc-color-cell {{ 'uc-pi' if day_label in pi_labels else '' }}"
+                    {% if day_label and uc_color %}
+                      style="--uc-bg: {{ uc_color.bg }}; --uc-border: {{ uc_color.border }}; --uc-text: {{ uc_color.text }};"
+                    {% endif %}
+                  >{{ day_label }}</div>
                 {% endfor %}
               </div>
             {% endfor %}
@@ -87,8 +99,15 @@
               <div class="tcell time-col">{{ header.horario }}</div>
               {% for d in month.dates %}
                 {% set key = d.isoformat() %}
-                {% set day_label = day_uc_map.get(key, "") %}
-                <div class="tcell uc-cell {{ 'uc-pi' if day_label == 'PI' else '' }}">{{ day_label }}</div>
+                {% set slot_key = key ~ '#0' %}
+                {% set day_label = slot_uc_map.get(slot_key, "") %}
+                {% set uc_color = uc_color_map.get(day_label, {}) %}
+                <div
+                  class="tcell uc-cell uc-color-cell {{ 'uc-pi' if day_label in pi_labels else '' }}"
+                  {% if day_label and uc_color %}
+                    style="--uc-bg: {{ uc_color.bg }}; --uc-border: {{ uc_color.border }}; --uc-text: {{ uc_color.text }};"
+                  {% endif %}
+                >{{ day_label }}</div>
               {% endfor %}
             </div>
           {% endif %}
@@ -119,10 +138,17 @@
 
         {% for unit in units %}
           {% set idx = loop.index %}
-          {% set is_pi = "projeto integrador" in (unit.nome|lower) or (unit.id|lower in ["pi","ucpi"]) %}
+          {% set label = "UC" ~ idx %}
+          {% set is_pi = label in pi_labels %}
+          {% set uc_color = uc_color_map.get(label, {}) %}
           <div class="uc-row {{ 'uc-zebra' if loop.index is even else '' }} {{ 'uc-pi-row' if is_pi else '' }}">
             <div>
-              <span class="uc-badge">{{ "PI" if is_pi else ("UC" ~ idx) }}</span>
+              <span
+                class="uc-badge uc-color-badge"
+                {% if uc_color %}
+                  style="--uc-bg: {{ uc_color.bg }}; --uc-border: {{ uc_color.border }}; --uc-text: {{ uc_color.text }};"
+                {% endif %}
+              >{{ label }}</span>
             </div>
             <div class="uc-name">{{ unit.nome or "-" }}</div>
             <div class="uc-right uc-ch">{{ unit.carga_horaria or "-" }}</div>

@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{ title or "Sistema de Programação" }}</title>
+  <title>{{ title or "Sistema de ProgramaÃ§Ã£o" }}</title>
 
   <!-- Inter (Google Fonts) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,7 +19,7 @@
       <!-- Brand / Logo -->
       <div class="brand">
         <span class="brand-text">FLOW</span>
-        <span class="brand-subtitle">Programação de cursos</span>
+        <span class="brand-subtitle">ProgramaÃ§Ã£o de cursos</span>
       </div>
 
       <!-- Navigation -->
@@ -29,7 +29,7 @@
   <div class="nav-group">
     <a href="/" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
-        <!-- ícone sério: dashboard -->
+        <!-- Ã­cone sÃ©rio: dashboard -->
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 13h8V3H3v10zM13 21h8V11h-8v10zM13 3h8v6h-8V3zM3 17h8v4H3v-4z"/>
         </svg>
@@ -47,7 +47,7 @@
 
     <a href="/courses" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
-        <!-- ícone sério: book -->
+        <!-- Ã­cone sÃ©rio: book -->
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 0 4 19.5V4.5A2.5 2.5 0 0 1 6.5 2z"/>
@@ -58,7 +58,7 @@
 
     <a href="/collaborators" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
-        <!-- ícone sério: users -->
+        <!-- Ã­cone sÃ©rio: users -->
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/>
           <circle cx="9" cy="7" r="3"/>
@@ -71,7 +71,7 @@
 
     <a href="/rooms" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
-        <!-- ícone sério: building -->
+        <!-- Ã­cone sÃ©rio: building -->
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 22h18"/>
           <path d="M6 22V4a1 1 0 0 1 1-1h6v19"/>
@@ -84,7 +84,7 @@
 
     <a href="/shifts" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
-        <!-- ícone sério: clock -->
+        <!-- Ã­cone sÃ©rio: clock -->
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9"/>
           <path d="M12 7v5l3 2"/>
@@ -95,38 +95,69 @@
 
     <a href="/calendars" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
-        <!-- ícone sério: calendar -->
+        <!-- Ã­cone sÃ©rio: calendar -->
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2"/>
           <path d="M16 2v4M8 2v4M3 10h18"/>
         </svg>
       </span>
-      <span class="nav-text">Calendário</span>
+      <span class="nav-text">CalendÃ¡rio</span>
     </a>
 
-    <!-- divisor logo abaixo do Calendário -->
+    <!-- divisor logo abaixo do CalendÃ¡rio -->
     <div class="nav-divider"></div>
   </div>
 
-  <!-- Grupo 3: Programação -->
+  <!-- Grupo 2.5: Disponibilidade -->
   <div class="nav-group">
-    <div class="nav-section">Programação</div>
+    <div class="nav-section">Disponibilidade</div>
+
+    <a href="/availability/instructors" class="nav-link">
+      <span class="nav-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="3"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a3 3 0 0 1 0 5.74"/>
+        </svg>
+      </span>
+      <span class="nav-text">Instrutores</span>
+    </a>
+
+    <a href="/availability/rooms" class="nav-link">
+      <span class="nav-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 22h18"/>
+          <path d="M6 22V4a1 1 0 0 1 1-1h6v19"/>
+          <path d="M13 7h4a1 1 0 0 1 1 1v14"/>
+          <path d="M9 7h1M9 11h1M9 15h1M16 11h1M16 15h1"/>
+        </svg>
+      </span>
+      <span class="nav-text">Ambientes</span>
+    </a>
+
+    <div class="nav-divider"></div>
+  </div>
+
+  <!-- Grupo 3: ProgramaÃ§Ã£o -->
+  <div class="nav-group">
+    <div class="nav-section">ProgramaÃ§Ã£o</div>
 
     <a href="/programming" class="nav-link nav-primary">
       <span class="nav-icon" aria-hidden="true">
-        <!-- ícone sério e correto: clipboard/list (sem “IA”) -->
+        <!-- Ã­cone sÃ©rio e correto: clipboard/list (sem â€œIAâ€) -->
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 5h6"/>
           <path d="M9 3h6a2 2 0 0 1 2 2v16H7V5a2 2 0 0 1 2-2z"/>
           <path d="M9 9h6M9 13h6M9 17h6"/>
         </svg>
       </span>
-      <span class="nav-text">Criar Programação</span>
+      <span class="nav-text">Criar ProgramaÃ§Ã£o</span>
     </a>
 
     <a href="/chronograms" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
-        <!-- ícone sério: chart -->
+        <!-- Ã­cone sÃ©rio: chart -->
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 3v18h18"/>
           <path d="M7 13v5M12 9v9M17 6v12"/>

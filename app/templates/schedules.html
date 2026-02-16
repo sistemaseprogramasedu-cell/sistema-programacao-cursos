@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% set title = "Criar Programacao" %}
 {% block content %}
 
@@ -15,7 +15,7 @@
       </div>
 
       <div class="field medium">
-        <label>Mês</label>
+        <label>MÃªs</label>
         <select name="mes" data-filter-mes>
           <option value="" data-default-label="Todos">Todos</option>
           {% for month in all_months %}
@@ -40,11 +40,7 @@
 
       <div class="actions inline-actions inline-actions-right">
         <a class="button ghost" href="/programming/current">Ver Programacao Atual</a>
-        <a class="button" href="/programming/new" title="Nova Oferta" aria-label="Nova Oferta">
-          <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;fill:currentColor">
-            <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-          </svg>
-        </a>
+        <a class="button" href="/programming/new" title="Nova Oferta" aria-label="Nova Oferta">Nova Oferta</a>
       </div>
     </form>
   </div>
@@ -90,9 +86,14 @@
                     <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 000-1.42l-2.5-2.5a1.003 1.003 0 00-1.42 0l-1.83 1.83 3.75 3.75 2-1.66z"/>
                   </svg>
                 </a>
-                <a class="button btn-pre icon-btn" href="/programming/{{ schedule.id }}/pre-chronogram?layout=portrait" title="Pré-cronograma" aria-label="Pré-cronograma">
+                <a class="button btn-pre icon-btn" href="/programming/{{ schedule.id }}/pre-chronogram?layout=portrait" title="PrÃ©-cronograma" aria-label="PrÃ©-cronograma">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M3 3h18v18H3V3zm2 2v3h14V5H5zm0 5v3h4v-3H5zm6 0v3h8v-3h-8zm-6 5v4h4v-4H5zm6 0v4h8v-4h-8z"/>
+                  </svg>
+                </a>
+                <a class="button btn-empty icon-btn" href="/programming/{{ schedule.id }}/empty-chronogram?layout=portrait" title="Cronograma vazio" aria-label="Cronograma vazio">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm0 4h14V5H5v2zm0 12h14V9H5v10z"/>
                   </svg>
                 </a>
                 <form method="post" action="/programming/{{ schedule.id }}/delete">
@@ -125,7 +126,7 @@
             <th>Curso</th>
             <th>Periodo</th>
             <th>CH</th>
-            <th>Nº da turma</th>
+            <th>NÂº da turma</th>
             <th>Horario</th>
             <th>Analista</th>
             <th>Assistente</th>
@@ -135,7 +136,8 @@
         </thead>
         <tbody>
           {% for row in group.rows %}
-            <tr>
+            {% set turno_key = (row.turno or "")|lower %}
+            <tr class="{{ 'turno-tarde' if 'tarde' in turno_key else '' }}">
               <td>{{ row.turno }}</td>
               <td>{{ row.pavimento }}</td>
               <td>{{ row.ambiente }}</td>
@@ -179,6 +181,7 @@
   .actions-compact form { margin: 0; }
   .btn-edit { background: #e8f1ff; color: #0b3d91; border: 1px solid #bfd7ff; }
   .btn-pre { background: #e9fbea; color: #1b5e20; border: 1px solid #bfe8c2; }
+  .btn-empty { background: #fff8e8; color: #7a4b00; border: 1px solid #ffe2a8; }
   .btn-del { background: #ffe9e9; color: #8e0000; border: 1px solid #ffc4c4; }
   .icon-btn { min-width: 36px; width: 36px; height: 36px; padding: 0; }
   .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
@@ -195,6 +198,9 @@
   .report-table td {
     font-size: 12px;
     white-space: nowrap;
+  }
+  .report-table tr.turno-tarde td {
+    background: #f0f0f0;
   }
 
   @media print {
@@ -277,3 +283,4 @@
 </script>
 
 {% endblock %}
+

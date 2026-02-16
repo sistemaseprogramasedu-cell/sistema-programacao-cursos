@@ -1,9 +1,9 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% set title = "Cronogramas" %}
 {% block content %}
 <form class="filters" method="get">
   <div>
-    <label>ID PRÉ</label>
+    <label>ID PRE</label>
     <input name="id" value="{{ filters.id if filters.id is defined else '' }}" />
   </div>
   <div>
@@ -11,7 +11,7 @@
     <input name="ano" value="{{ filters.ano }}" />
   </div>
   <div>
-    <label>Mês</label>
+    <label>Mes</label>
     <select name="mes">
       <option value="">Todos</option>
       {% for month in months %}
@@ -60,34 +60,66 @@
     <a class="button ghost chrono-btn" href="/chronograms">Limpar</a>
   </div>
 </form>
-<table class="table">
-  <thead>
-    <tr>
-      <th>Mês/Ano</th>
-      <th>Curso</th>
-      <th>Turma</th>
-      <th>Turno</th>
-      <th>Ambiente</th>
-      <th>Instrutor</th>
-      <th>Analista</th>
-      <th>Assistente</th>
-      <th>Ações</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td colspan="8">Nenhum cronograma gerado ainda. A geração/exportação será disponibilizada em breve.</td>
-      <td>
-        <button class="button" type="button" disabled>Cronograma</button>
-      </td>
-    </tr>
-  </tbody>
-</table>
+
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID PRE</th>
+        <th>Mes/Ano</th>
+        <th>Curso</th>
+        <th>Turma</th>
+        <th>Turno</th>
+        <th>Ambiente</th>
+        <th>Instrutor</th>
+        <th>Analista</th>
+        <th>Assistente</th>
+        <th>Status</th>
+        <th>Atualizado em</th>
+        <th>Acoes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.id }}</td>
+          <td>{{ row.mes_label }} / {{ row.ano }}</td>
+          <td>{{ row.curso }}</td>
+          <td>{{ row.turma }}</td>
+          <td>{{ row.turno }}</td>
+          <td>{{ row.ambiente }}</td>
+          <td>{{ row.instrutor }}</td>
+          <td>{{ row.analista }}</td>
+          <td>{{ row.assistente }}</td>
+          <td>{{ row.status }}</td>
+          <td>
+            <div>{{ row.updated_at }}</div>
+            <small>{{ row.updated_by }}</small>
+          </td>
+          <td>
+            <div class="chrono-row-actions">
+              <a class="button chrono-btn" href="/chronograms/{{ row.id }}/edit">Editar</a>
+              <a class="button ghost chrono-btn" href="/programming/{{ row.id }}/pre-chronogram" target="_blank">Visualizar</a>
+              <form method="post" action="/chronograms/{{ row.id }}/share">
+                <button class="button secondary chrono-btn" type="submit">Atualizar Link</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      {% if not rows %}
+        <tr>
+          <td colspan="12">Nenhum cronograma encontrado para os filtros informados.</td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
 
 <style>
   .chrono-btn {
     min-width: 92px;
-    height: 34px;
+    min-height: 34px;
     padding: 6px 12px;
     font-size: 13px;
     border-radius: 8px;
@@ -104,5 +136,16 @@
     align-items: stretch !important;
     justify-content: flex-end;
   }
+
+  .chrono-row-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .chrono-row-actions form {
+    margin: 0;
+  }
 </style>
 {% endblock %}
+

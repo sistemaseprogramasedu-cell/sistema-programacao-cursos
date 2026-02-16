@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from datetime import date, datetime, time
+import re
 from typing import Any, Dict, List
 
 from .storage import (
@@ -8,7 +9,6 @@ from .storage import (
     ensure_unique_id,
     find_item,
     load_items,
-    next_numeric_id,
     require_fields,
     save_items,
 )
@@ -50,7 +50,7 @@ def get_schedule(schedule_id: str) -> Dict[str, Any] | None:
 def create_schedule(payload: Dict[str, Any]) -> Dict[str, Any]:
     items = load_items(FILENAME)
     if not payload.get("id"):
-        payload["id"] = next_numeric_id(items)
+        payload["id"] = _next_offer_id(items, _resolve_year(payload.get("ano")))
     _normalize_instructors(payload)
     _normalize_dates(payload)
     require_fields(payload, REQUIRED_FIELDS)
@@ -92,6 +92,9 @@ def _validate_references(payload: Dict[str, Any]) -> None:
     for instructor_id in _get_instructor_ids(payload):
         _ensure_instructor(instructor_id, "Instrutor")
     _ensure_instructor(payload["analista_id"], "Analista")
+    assistente_id = str(payload.get("assistente_id") or "").strip()
+    if assistente_id:
+        _ensure_instructor(assistente_id, "Assistente")
     _ensure_exists(ROOMS_FILE, payload["sala_id"], "Ambiente")
     _ensure_exists(SHIFTS_FILE, payload["turno_id"], "Turno")
 
@@ -264,8 +267,39 @@ def _validate_dates_and_times(payload: Dict[str, Any]) -> None:
     turma = payload.get("turma", "")
     if not turma:
         raise ValidationError("NÃºmero da turma Ã© obrigatÃ³rio.")
-    import re
 
     if not re.fullmatch(r"\d{4}\.\d{2}\.\d{3}", turma):
         raise ValidationError("NÃºmero da turma invÃ¡lido. Formato esperado: 0000.00.000.")
+
+
+def _resolve_year(raw: Any) -> int:
+    try:
+        value = int(str(raw or "").strip())
+        if value > 0:
+            return value
+    except (TypeError, ValueError):
+        pass
+    return datetime.now().year
+
+
+def _next_offer_id(items: List[Dict[str, Any]], year: int) -> str:
+    highest = 0
+    year_str = str(year)
+    pattern = re.compile(r"^\s*(\d+)\s*/\s*(\d{4})\s*$")
+    for item in items:
+        raw_id = str(item.get("id") or "").strip()
+        match = pattern.match(raw_id)
+        if not match:
+            continue
+        seq_text, item_year = match.groups()
+        if item_year != year_str:
+            continue
+        try:
+            seq = int(seq_text)
+        except ValueError:
+            continue
+        highest = max(highest, seq)
+    next_seq = highest + 1
+    seq_text = f"{next_seq:02d}" if next_seq < 100 else str(next_seq)
+    return f"{seq_text}/{year_str}"
 

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% set title = "Disponibilidade - Instrutores" %}
+{% block content %}
+<div class="panel">
+  <div class="panel-header">
+    <h3>Disponibilidade de Instrutores</h3>
+  </div>
+
+  {% if not shared_mode %}
+    <form class="filters filters-inline" method="get" action="/availability/instructors" id="availabilityFilterForm">
+      <div class="field medium">
+        <label>Instrutor</label>
+        <select name="instructor_id" required>
+          <option value="">Selecione</option>
+          {% for instructor in instructors %}
+            <option value="{{ instructor.id }}" {% if selected_instructor_id == instructor.id %}selected{% endif %}>{{ instructor.nome_sobrenome or instructor.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field small">
+        <label>Ano</label>
+        <input name="year" value="{{ selected_year }}" inputmode="numeric" required />
+      </div>
+      <div class="field medium">
+        <label>Período</label>
+        <select name="period_type" id="periodTypeSelect">
+          {% for opt in period_type_options %}
+            <option value="{{ opt.value }}" {% if selected_period_type == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field medium">
+        <label>Valor</label>
+        <select name="period_value" id="periodValueSelect">
+          {% for opt in period_options %}
+            <option value="{{ opt.value }}" {% if selected_period_value == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="actions inline-actions inline-actions-filters">
+        <button class="button" type="submit">Carregar</button>
+      </div>
+    </form>
+  {% endif %}
+
+  {% if selected_instructor %}
+    <div class="availability-head">
+      <div><strong>Instrutor:</strong> {{ selected_instructor.nome_sobrenome or selected_instructor.nome }}</div>
+      <div><strong>Período:</strong> {{ selected_period_label }} / {{ selected_year }}</div>
+      {% if not shared_mode %}
+        <div><strong>Status:</strong> {{ "Respondido" if share_status == "respondido" else "Enviado" if share_status == "enviado" else "Não enviado" }}</div>
+      {% endif %}
+    </div>
+
+    {% if not shared_mode %}
+      <div class="share-bar">
+        <form method="post" action="/availability/instructors/share">
+          <input type="hidden" name="instructor_id" value="{{ selected_instructor_id }}" />
+          <input type="hidden" name="year" value="{{ selected_year }}" />
+          <input type="hidden" name="period_type" value="{{ selected_period_type }}" />
+          <input type="hidden" name="period_value" value="{{ selected_period_value }}" />
+          <button class="button secondary" type="submit">Gerar Link para Preenchimento</button>
+        </form>
+        {% if share_url %}
+          <input id="shareUrlInput" type="text" readonly value="{{ share_url }}" />
+          <button class="button ghost" id="copyShareBtn" type="button">Copiar</button>
+          <span id="copyFeedback" class="copy-feedback"></span>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="{{ '/availability/instructors/shared/' ~ shared_token ~ '/save' if shared_mode else '/availability/instructors/save' }}">
+      {% if not shared_mode %}
+        <input type="hidden" name="instructor_id" value="{{ selected_instructor_id }}" />
+        <input type="hidden" name="year" value="{{ selected_year }}" />
+        <input type="hidden" name="period_type" value="{{ selected_period_type }}" />
+        <input type="hidden" name="period_value" value="{{ selected_period_value }}" />
+      {% endif %}
+
+      <div class="table-wrapper">
+        <table class="table availability-table">
+          <thead>
+            <tr>
+              <th>Turno / Horário</th>
+              {% for day in weekdays %}
+                <th>{{ day }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for shift in shifts %}
+              <tr>
+                <td>
+                  <strong>{{ shift.nome }}</strong>
+                  <div class="small-muted">{{ shift.horario_inicio }} - {{ shift.horario_fim }}</div>
+                </td>
+                {% for day in weekdays %}
+                  {% set key = day ~ "|" ~ shift.id %}
+                  <td class="check-cell">
+                    <label class="checkbox-item check-center">
+                      <input type="checkbox" name="slots" value="{{ key }}" {% if key in selected_slots %}checked{% endif %} />
+                      <span>Disp.</span>
+                    </label>
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label>Observações</label>
+          <textarea name="notes" rows="4">{{ notes }}</textarea>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="button" type="submit">{{ "Enviar Disponibilidade" if shared_mode else "Salvar Disponibilidade" }}</button>
+        {% if not shared_mode %}
+          <a class="button ghost" href="/availability/instructors">Limpar</a>
+        {% endif %}
+      </div>
+    </form>
+  {% else %}
+    <p>Selecione um instrutor e um período para começar.</p>
+  {% endif %}
+</div>
+
+<style>
+  .availability-head {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 10px 0 14px;
+    font-size: 13px;
+  }
+  .share-bar {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .share-bar input {
+    width: 100%;
+    border: 1px solid #d5dfeb;
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .small-muted {
+    font-size: 11px;
+    color: #64748b;
+  }
+  .availability-table th,
+  .availability-table td {
+    text-align: center;
+    vertical-align: middle;
+  }
+  .availability-table td:first-child {
+    text-align: left;
+    min-width: 180px;
+  }
+  .check-center {
+    justify-content: center;
+  }
+  .copy-feedback {
+    font-size: 12px;
+    color: #065f46;
+    font-weight: 700;
+  }
+</style>
+
+<script>
+  (function () {
+    const copyBtn = document.getElementById("copyShareBtn");
+    const shareInput = document.getElementById("shareUrlInput");
+    const feedback = document.getElementById("copyFeedback");
+    if (copyBtn && shareInput) {
+      copyBtn.addEventListener("click", async function () {
+        const text = shareInput.value || "";
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (_err) {
+          shareInput.select();
+          document.execCommand("copy");
+        }
+        if (feedback) {
+          feedback.textContent = "Link copiado";
+          window.setTimeout(() => { feedback.textContent = ""; }, 1400);
+        }
+      });
+    }
+  })();
+</script>
+{% endblock %}

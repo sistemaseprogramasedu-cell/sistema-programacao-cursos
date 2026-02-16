@@ -1,0 +1,620 @@
+﻿{% extends "base.html" %}
+{% set title = "Edicao de Cronograma" if shared_mode else "Cronograma Editavel" %}
+{% block content %}
+<div class="print-page">
+  <div class="chrono-sheet chrono-landscape chrono-editor-sheet">
+    <div class="chrono-top-actions">
+      {% if not shared_mode %}
+        <a class="button ghost" href="/chronograms">Voltar</a>
+        <a class="button ghost" href="/programming/{{ schedule.id }}/pre-chronogram" target="_blank">Visualizar pre-cronograma</a>
+      {% endif %}
+    </div>
+
+    <div class="chrono-header-top">
+      <div class="chrono-title-row">
+        <div class="chrono-title">CRONOGRAMA EDITAVEL</div>
+        <div class="chrono-offer-id">ID Oferta: {{ schedule.id }}</div>
+      </div>
+      <div class="info-grid">
+        <div><span>Curso:</span> {{ header.curso }}</div>
+        <div><span>Turma:</span> {{ header.turma }}</div>
+        <div><span>Tipo:</span> {{ header.tipo }}</div>
+        <div><span>Turno:</span> {{ header.turno }}</div>
+        <div><span>Instrutor:</span> {{ header.instrutor }}</div>
+        <div><span>Analista:</span> {{ header.analista }}</div>
+        <div><span>Periodo:</span> {{ header.periodo }}</div>
+        <div><span>Dias:</span> {{ header.dias }}</div>
+        <div><span>Recurso:</span> {{ header.recurso }}</div>
+        <div><span>Programa/Parceria:</span> {{ header.programa_parceria }}</div>
+      </div>
+    </div>
+
+    {% if not shared_mode %}
+      <div class="chrono-share-box">
+        <form method="post" action="/chronograms/{{ schedule.id }}/share">
+          <button class="button secondary" type="submit">Atualizar Link</button>
+        </form>
+        {% if share_url %}
+          <div class="share-link-wrap">
+            <input id="shareLinkInput" type="text" readonly value="{{ share_url }}" />
+            <button class="button ghost icon-btn" type="button" id="copyShareBtn" title="Copiar link" aria-label="Copiar link">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <button class="button ghost icon-btn icon-standby" type="button" title="E-mail (em stand-by)" aria-label="E-mail em stand-by" disabled>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                <path d="m3 7 9 6 9-6"></path>
+              </svg>
+            </button>
+            <span id="copyFeedback" class="copy-feedback" aria-live="polite"></span>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <p class="editor-hint">Linha UC DIA: use o raio para trocar as UCs de um dia inteiro com outro. Nas cÃ©lulas de horÃ¡rio, vocÃª pode trocar UCs individualmente.</p>
+
+    <form method="post" action="{{ '/chronograms/shared/' ~ shared_token ~ '/save' if shared_mode else '/chronograms/' ~ schedule.id ~ '/edit' }}" id="chronoForm">
+      <input type="hidden" name="slot_sequence" id="slotSequenceInput" />
+      <input type="hidden" name="instructor_sequence" id="instructorSequenceInput" />
+
+      {% for month in months_data %}
+        <div class="month-frame">
+          <div class="month-bar">
+            <span class="month-main">{{ month.label|upper }} - {{ month.letivos_text }}</span>
+            <span class="month-sub">{{ month.year }}</span>
+          </div>
+
+          <div class="chrono-block" style="--cols: {{ month.dates|length }};">
+            <div class="chrono-row day-fill-row">
+              <div class="tcell time-col">UC DIA</div>
+              {% for d in month.dates %}
+                {% set key = d.isoformat() %}
+                <div class="tcell day-swap-cell" data-date="{{ key }}">
+                  <button type="button" class="day-swap-handle" draggable="true" data-date="{{ key }}" title="Trocar dia inteiro">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M13 2 4 14h6l-1 8 9-12h-6z"></path>
+                    </svg>
+                  </button>
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="chrono-header">
+              <div class="hcell time-col">Horario</div>
+              {% for d in month.dates %}
+                <div class="hcell">
+                  <div class="dow">{{ "SEG" if d.weekday()==0 else "TER" if d.weekday()==1 else "QUA" if d.weekday()==2 else "QUI" if d.weekday()==3 else "SEX" if d.weekday()==4 else "SAB" }}</div>
+                  <div class="dom">{{ d.day }}</div>
+                </div>
+              {% endfor %}
+            </div>
+
+            {% if hour_slots %}
+              {% for slot in hour_slots %}
+                {% set slot_idx = loop.index0 %}
+                <div class="chrono-row">
+                  <div class="tcell time-col">{{ slot.label }}</div>
+                  {% for d in month.dates %}
+                    {% set key = d.isoformat() %}
+                    {% set slot_key = key ~ '#' ~ slot_idx %}
+                    {% set label = slot_uc_map.get(slot_key, "") %}
+                    {% set uc_color = uc_color_map.get(label, {}) %}
+                    <div class="tcell editor-cell" data-type="uc" data-date="{{ key }}" data-slot-idx="{{ slot_idx }}">
+                      <span
+                        class="drag-chip uc-edit-chip {{ 'uc-pi' if label in pi_labels else '' }} uc-color-chip"
+                        draggable="true"
+                        data-type="uc"
+                        data-value="{{ label }}"
+                        {% if label and uc_color %}
+                          style="--uc-bg: {{ uc_color.bg }}; --uc-border: {{ uc_color.border }}; --uc-text: {{ uc_color.text }};"
+                        {% endif %}
+                      >{{ label or '-' }}</span>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            {% else %}
+              {% for idx in range(slots_per_day) %}
+                <div class="chrono-row">
+                  <div class="tcell time-col">{{ header.horario if slots_per_day == 1 else ('Bloco ' ~ (idx + 1)) }}</div>
+                  {% for d in month.dates %}
+                    {% set key = d.isoformat() %}
+                    {% set slot_key = key ~ '#' ~ idx %}
+                    {% set label = slot_uc_map.get(slot_key, "") %}
+                    {% set uc_color = uc_color_map.get(label, {}) %}
+                    <div class="tcell editor-cell" data-type="uc" data-date="{{ key }}" data-slot-idx="{{ idx }}">
+                      <span
+                        class="drag-chip uc-edit-chip {{ 'uc-pi' if label in pi_labels else '' }} uc-color-chip"
+                        draggable="true"
+                        data-type="uc"
+                        data-value="{{ label }}"
+                        {% if label and uc_color %}
+                          style="--uc-bg: {{ uc_color.bg }}; --uc-border: {{ uc_color.border }}; --uc-text: {{ uc_color.text }};"
+                        {% endif %}
+                      >{{ label or '-' }}</span>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            {% endif %}
+
+            <div class="chrono-row instr-row">
+              <div class="tcell time-col instr">Instrutor</div>
+              {% for d in month.dates %}
+                {% set key = d.isoformat() %}
+                {% set sigla = day_instrutor_map.get(key, "") %}
+                <div class="tcell editor-cell" data-type="instr" data-date="{{ key }}">
+                  <span class="drag-chip instr-edit-chip" draggable="true" data-type="instr" data-value="{{ sigla }}">{{ sigla or '-' }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+
+      <div class="uc-frame">
+        <div class="uc-frame-head">
+          <div class="uc-frame-title">Resumo das UCs</div>
+          <div class="uc-frame-sub">Distribuicao estimada por dias letivos</div>
+        </div>
+        <div class="uc-table">
+          <div class="uc-row uc-head">
+            <div>UC</div>
+            <div>Nome</div>
+            <div class="uc-right">CH</div>
+          </div>
+          {% for unit in units %}
+            {% set idx = loop.index %}
+            {% set label = "UC" ~ idx %}
+            {% set is_pi = label in pi_labels %}
+            {% set uc_color = uc_color_map.get(label, {}) %}
+            <div class="uc-row {{ 'uc-zebra' if loop.index is even else '' }} {{ 'uc-pi-row' if is_pi else '' }}">
+              <div>
+                <span
+                  class="uc-badge uc-color-badge"
+                  {% if uc_color %}
+                    style="--uc-bg: {{ uc_color.bg }}; --uc-border: {{ uc_color.border }}; --uc-text: {{ uc_color.text }};"
+                  {% endif %}
+                >{{ label }}</span>
+              </div>
+              <div class="uc-name">{{ unit.nome or "-" }}</div>
+              <div class="uc-right uc-ch">{{ unit.carga_horaria or "-" }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="actions chrono-editor-actions">
+        <button class="button secondary" type="submit" name="operation" value="restore_default">Distribuir Padrão</button>
+        <button class="button" type="submit">Salvar distribuicao de UCs e instrutores</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  const form = document.getElementById('chronoForm');
+  const slotInput = document.getElementById('slotSequenceInput');
+  const instructorInput = document.getElementById('instructorSequenceInput');
+  const editableCells = Array.from(document.querySelectorAll('.editor-cell'));
+  const ucCells = Array.from(document.querySelectorAll('.editor-cell[data-type="uc"][data-slot-idx]'));
+  const instrCells = Array.from(document.querySelectorAll('.editor-cell[data-type="instr"]'));
+  const editableChips = Array.from(document.querySelectorAll('.editor-cell .drag-chip'));
+  const daySwapHandles = Array.from(document.querySelectorAll('.day-swap-handle'));
+  const daySwapCells = Array.from(document.querySelectorAll('.day-swap-cell'));
+  const copyBtn = document.getElementById('copyShareBtn');
+  const shareInput = document.getElementById('shareLinkInput');
+  const copyFeedback = document.getElementById('copyFeedback');
+  const piLabels = new Set({{ pi_labels|tojson }});
+  const ucColorMap = {{ uc_color_map|tojson }};
+
+  let dragData = null;
+  let dragMode = null; // "chip" | "day" | null
+  let dayDragSource = null;
+
+  function clearUiSelections() {
+    document.querySelectorAll('.drag-chip.active-source, .day-swap-handle.active-source').forEach(function (item) {
+      item.classList.remove('active-source');
+    });
+    document.querySelectorAll('.editor-cell.drop-over, .day-swap-cell.drop-over').forEach(function (item) {
+      item.classList.remove('drop-over');
+    });
+  }
+
+  function setChipValue(chip, value) {
+    const normalized = (value || '').trim().toUpperCase();
+    chip.dataset.value = normalized;
+    chip.textContent = normalized || '-';
+    if (chip.dataset.type === 'uc') {
+      chip.classList.toggle('uc-pi', piLabels.has(normalized));
+      const ucColor = ucColorMap[normalized];
+      if (normalized && ucColor) {
+        chip.style.setProperty('--uc-bg', ucColor.bg || '');
+        chip.style.setProperty('--uc-border', ucColor.border || '');
+        chip.style.setProperty('--uc-text', ucColor.text || '');
+      } else {
+        chip.style.removeProperty('--uc-bg');
+        chip.style.removeProperty('--uc-border');
+        chip.style.removeProperty('--uc-text');
+      }
+    }
+  }
+
+  function syncPayload() {
+    const slotCells = Array.from(ucCells);
+    slotCells.sort(function (a, b) {
+      const da = a.dataset.date || '';
+      const db = b.dataset.date || '';
+      if (da < db) return -1;
+      if (da > db) return 1;
+      const sa = parseInt(a.dataset.slotIdx || '0', 10);
+      const sb = parseInt(b.dataset.slotIdx || '0', 10);
+      return sa - sb;
+    });
+    const slotValues = slotCells.map(function (cell) {
+      const chip = cell.querySelector('.drag-chip');
+      return (chip && chip.dataset.value) || '';
+    });
+
+    const sortedInstrCells = Array.from(instrCells);
+    sortedInstrCells.sort(function (a, b) {
+      const da = a.dataset.date || '';
+      const db = b.dataset.date || '';
+      if (da < db) return -1;
+      if (da > db) return 1;
+      return 0;
+    });
+    const instrValues = sortedInstrCells.map(function (cell) {
+      const chip = cell.querySelector('.drag-chip');
+      return (chip && chip.dataset.value) || '';
+    });
+    slotInput.value = JSON.stringify(slotValues);
+    instructorInput.value = JSON.stringify(instrValues);
+  }
+
+  function applyToCell(cell, sourceData) {
+    if (!sourceData || sourceData.type !== cell.dataset.type) {
+      return false;
+    }
+    const targetChip = cell.querySelector('.drag-chip');
+    if (!targetChip) {
+      return false;
+    }
+
+    if (sourceData.isPalette) {
+      if (cell.dataset.type !== 'instr') {
+        return false;
+      }
+      setChipValue(targetChip, sourceData.value);
+      return true;
+    } else if (sourceData.source && sourceData.source !== targetChip) {
+      const targetValue = targetChip.dataset.value || '';
+      setChipValue(targetChip, sourceData.source.dataset.value || '');
+      setChipValue(sourceData.source, targetValue);
+      return true;
+    }
+    return false;
+  }
+
+  function sourceDataFromEvent(event, targetType, requireMode) {
+    if (requireMode && dragMode !== requireMode) {
+      return null;
+    }
+    if (dragData && dragData.type === targetType && dragMode === 'chip') {
+      return dragData;
+    }
+    const raw = event.dataTransfer ? (event.dataTransfer.getData('text/plain') || '') : '';
+    if (!raw || raw.indexOf('|') <= 0) {
+      return null;
+    }
+    const parts = raw.split('|');
+    if (parts.length < 2) {
+      return null;
+    }
+    const srcType = (parts[0] || '').trim();
+    const srcValue = (parts.slice(1).join('|') || '').trim().toUpperCase();
+    if (srcType !== targetType) {
+      return null;
+    }
+    return {
+      type: srcType,
+      value: srcValue,
+      source: null,
+      isPalette: (srcType === 'instr'),
+    };
+  }
+
+  function bindTargetCell(cell) {
+    const targetType = cell.dataset.type;
+    const canReceiveChip = function (event) {
+      return !!sourceDataFromEvent(event, targetType, 'chip');
+    };
+
+    cell.addEventListener('dragenter', function (event) {
+      if (!canReceiveChip(event)) {
+        return;
+      }
+      event.preventDefault();
+      cell.classList.add('drop-over');
+    });
+
+    cell.addEventListener('dragover', function (event) {
+      if (!canReceiveChip(event)) {
+        return;
+      }
+      event.preventDefault();
+      cell.classList.add('drop-over');
+    });
+
+    cell.addEventListener('dragleave', function () {
+      cell.classList.remove('drop-over');
+    });
+
+    cell.addEventListener('drop', function (event) {
+      const sourceData = sourceDataFromEvent(event, targetType, 'chip');
+      if (!sourceData) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      cell.classList.remove('drop-over');
+      const changed = applyToCell(cell, sourceData);
+      if (changed) {
+        syncPayload();
+        clearUiSelections();
+      }
+    });
+  }
+
+  function getDayUcValues(dateKey) {
+    return ucCells
+      .filter(function (cell) { return (cell.dataset.date || '') === dateKey; })
+      .sort(function (a, b) {
+        const sa = parseInt(a.dataset.slotIdx || '0', 10);
+        const sb = parseInt(b.dataset.slotIdx || '0', 10);
+        return sa - sb;
+      })
+      .map(function (cell) {
+        const chip = cell.querySelector('.drag-chip');
+        return (chip && chip.dataset.value) || '';
+      });
+  }
+
+  function setDayUcValues(dateKey, values) {
+    const cells = ucCells
+      .filter(function (cell) { return (cell.dataset.date || '') === dateKey; })
+      .sort(function (a, b) {
+        const sa = parseInt(a.dataset.slotIdx || '0', 10);
+        const sb = parseInt(b.dataset.slotIdx || '0', 10);
+        return sa - sb;
+      });
+    cells.forEach(function (cell, idx) {
+      const chip = cell.querySelector('.drag-chip');
+      if (!chip) {
+        return;
+      }
+      setChipValue(chip, values[idx] || '');
+    });
+  }
+
+  function swapWholeDay(sourceDate, targetDate) {
+    if (!sourceDate || !targetDate || sourceDate === targetDate) {
+      return;
+    }
+    const sourceValues = getDayUcValues(sourceDate);
+    const targetValues = getDayUcValues(targetDate);
+    setDayUcValues(sourceDate, targetValues);
+    setDayUcValues(targetDate, sourceValues);
+    syncPayload();
+    clearUiSelections();
+  }
+
+  function extractDateTarget(node) {
+    if (!node) return '';
+    if (node.dataset && node.dataset.date) {
+      return node.dataset.date;
+    }
+    const parent = node.closest('[data-date]');
+    return parent ? (parent.dataset.date || '') : '';
+  }
+
+  function bindDayDropTarget(targetNode) {
+    const onDragEnter = function (event) {
+      if (dragMode !== 'day') {
+        return;
+      }
+      event.preventDefault();
+      const cell = targetNode.classList.contains('day-swap-cell')
+        ? targetNode
+        : targetNode.closest('.day-swap-cell');
+      if (cell) {
+        cell.classList.add('drop-over');
+      }
+    };
+
+    const onDragOver = function (event) {
+      if (dragMode !== 'day') {
+        return;
+      }
+      event.preventDefault();
+      const cell = targetNode.classList.contains('day-swap-cell')
+        ? targetNode
+        : targetNode.closest('.day-swap-cell');
+      if (cell) {
+        cell.classList.add('drop-over');
+      }
+    };
+
+    const onDragLeave = function () {
+      const cell = targetNode.classList.contains('day-swap-cell')
+        ? targetNode
+        : targetNode.closest('.day-swap-cell');
+      if (cell) {
+        cell.classList.remove('drop-over');
+      }
+    };
+
+    const onDrop = function (event) {
+      if (dragMode !== 'day') {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const raw = event.dataTransfer ? (event.dataTransfer.getData('text/day') || '') : '';
+      const sourceDate = raw || dayDragSource;
+      const targetDate = extractDateTarget(targetNode);
+      swapWholeDay(sourceDate, targetDate);
+    };
+
+    targetNode.addEventListener('dragenter', onDragEnter);
+    targetNode.addEventListener('dragover', onDragOver);
+    targetNode.addEventListener('dragleave', onDragLeave);
+    targetNode.addEventListener('drop', onDrop);
+  }
+
+  function bindDayHandle(handle) {
+    const targetDate = handle.dataset.date || '';
+
+    handle.addEventListener('dragstart', function (event) {
+      dragMode = 'day';
+      dayDragSource = targetDate;
+      daySwapHandles.forEach(function (item) { item.classList.remove('active-source'); });
+      handle.classList.add('active-source');
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/day', targetDate);
+      }
+    });
+
+    handle.addEventListener('dragend', function () {
+      dragMode = null;
+      dayDragSource = null;
+      clearUiSelections();
+    });
+  }
+
+  function bindChipSource(chip, isPalette) {
+    chip.addEventListener('dragstart', function (event) {
+      dragMode = 'chip';
+      dragData = {
+        type: chip.dataset.type,
+        value: chip.dataset.value || '',
+        source: isPalette ? null : chip,
+        isPalette: !!isPalette,
+      };
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = isPalette ? 'copyMove' : 'move';
+        event.dataTransfer.setData('text/plain', (chip.dataset.type || '') + '|' + (chip.dataset.value || ''));
+      }
+      chip.classList.add('active-source');
+    });
+    chip.addEventListener('dragend', function () {
+      dragMode = null;
+      dragData = null;
+      clearUiSelections();
+    });
+  }
+
+  editableChips.forEach(function (chip) { bindChipSource(chip, false); });
+
+  daySwapHandles.forEach(function (handle) {
+    bindDayHandle(handle);
+  });
+
+  editableCells.forEach(function (cell) {
+    bindTargetCell(cell);
+  });
+
+  editableChips.forEach(function (chip) {
+    chip.addEventListener('dragenter', function (event) {
+      const cell = chip.closest('.editor-cell');
+      if (!cell) {
+        return;
+      }
+      const sourceData = sourceDataFromEvent(event, cell.dataset.type, 'chip');
+      if (!sourceData) {
+        return;
+      }
+      event.preventDefault();
+      cell.classList.add('drop-over');
+    });
+    chip.addEventListener('dragover', function (event) {
+      const cell = chip.closest('.editor-cell');
+      if (!cell) {
+        return;
+      }
+      const sourceData = sourceDataFromEvent(event, cell.dataset.type, 'chip');
+      if (!sourceData) {
+        return;
+      }
+      event.preventDefault();
+      cell.classList.add('drop-over');
+    });
+    chip.addEventListener('drop', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const cell = chip.closest('.editor-cell');
+      const sourceData = cell ? sourceDataFromEvent(event, cell.dataset.type, 'chip') : null;
+      if (!cell || !sourceData) {
+        return;
+      }
+      const changed = applyToCell(cell, sourceData);
+      if (changed) {
+        syncPayload();
+        clearUiSelections();
+      }
+    });
+  });
+
+  // Dia inteiro (raio) pode soltar em qualquer parte da coluna do dia.
+  daySwapCells.forEach(function (cell) { bindDayDropTarget(cell); });
+  editableCells.forEach(function (cell) { bindDayDropTarget(cell); });
+  daySwapHandles.forEach(function (handle) { bindDayDropTarget(handle); });
+
+  if (form) {
+    form.addEventListener('submit', function () {
+      syncPayload();
+    });
+  }
+
+  if (copyBtn && shareInput) {
+    copyBtn.addEventListener('click', async function () {
+      const value = shareInput.value || '';
+      if (!value) {
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch (_err) {
+        shareInput.select();
+        document.execCommand('copy');
+      }
+      if (copyFeedback) {
+        copyFeedback.textContent = 'Link copiado';
+        copyFeedback.classList.add('show');
+        window.setTimeout(function () {
+          copyFeedback.classList.remove('show');
+          copyFeedback.textContent = '';
+        }, 1600);
+      }
+    });
+  }
+
+  document.addEventListener('drop', function () {
+    dragMode = null;
+    dragData = null;
+    dayDragSource = null;
+    clearUiSelections();
+  });
+
+  syncPayload();
+})();
+</script>
+{% endblock %}
+
+

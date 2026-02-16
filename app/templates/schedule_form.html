@@ -1,7 +1,7 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% set title = "Cadastro de Oferta" %}
 {% block content %}
-<form class="form" method="post" id="schedule-form">
+<form class="form" method="post" id="schedule-form" data-is-new="{{ 1 if not schedule else 0 }}" autocomplete="off">
   <div class="frame">
     <div class="frame-header">
       <h3>Cadastro de Oferta</h3>
@@ -9,15 +9,16 @@
     <div class="form-row">
       <div>
         <label>ID</label>
-        <input name="schedule_id" value="{{ schedule.id if schedule else schedule_id }}" readonly required />
+        <input id="schedule-id" name="schedule_id" value="{{ schedule.id if schedule else schedule_id }}" readonly required />
       </div>
       <div>
         <label>Ano</label>
-        <input name="ano" id="ano" value="{{ schedule.ano if schedule else '' }}" required />
+        <input name="ano" id="ano" class="guided-field" value="{{ schedule.ano if schedule else '' }}" required />
       </div>
       <div>
-        <label>Mês</label>
-        <select name="mes" required>
+        <label>MÃªs</label>
+        <select name="mes" class="guided-field" required>
+          <option value="" {% if not schedule %}selected{% endif %}>Selecione</option>
           {% for month in months %}
             <option value="{{ month.value }}" {% if schedule and schedule.mes|string == month.value %}selected{% endif %}>{{ month.label }}</option>
           {% endfor %}
@@ -30,119 +31,139 @@
     <div class="frame-header">
       <h3>Dados da Oferta</h3>
     </div>
-    <div class="form-row">
-      <div>
+
+    <div class="form-row oferta-row oferta-row-1">
+      <div class="oferta-col oferta-col-turno">
         <label>Turno</label>
-        <select name="turno_id" required>
+        <select name="turno_id" class="guided-field" required>
+          <option value="" data-start="" data-end="" data-hs="" {% if not schedule %}selected{% endif %}>Selecione</option>
           {% for shift in shifts %}
             <option value="{{ shift.id }}" data-start="{{ shift.horario_inicio }}" data-end="{{ shift.horario_fim }}" data-hs="{{ shift.hs_dia }}" {% if schedule and schedule.turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
           {% endfor %}
         </select>
       </div>
-      <div>
-        <label>Pavimento</label>
-        <input name="pavimento" id="pavimento" value="{{ schedule.pavimento if schedule else '' }}" readonly required />
-      </div>
-      <div>
+      <div class="oferta-col oferta-col-ambiente">
         <label>Ambiente</label>
-        <select name="sala_id" id="ambiente-select" required>
+        <select name="sala_id" id="ambiente-select" class="guided-field" required>
+          <option value="" data-floor="" data-capacity="" {% if not schedule %}selected{% endif %}>Selecione</option>
           {% for room in rooms %}
             <option value="{{ room.id }}" data-floor="{{ room.pavimento }}" data-capacity="{{ room.capacidade }}" {% if schedule and schedule.sala_id == room.id %}selected{% endif %}>{{ room.nome }}</option>
           {% endfor %}
         </select>
       </div>
-    </div>
-    <div class="form-row">
-      <div>
+      <div class="oferta-col oferta-col-pavimento">
+        <label>Pavimento</label>
+        <input name="pavimento" id="pavimento" value="{{ schedule.pavimento if schedule else '' }}" readonly required />
+      </div>
+      <div class="oferta-col oferta-col-qtd">
         <label>QTD. Alunos</label>
         <input name="qtd_alunos" id="qtd-alunos" value="{{ schedule.qtd_alunos if schedule else '' }}" required />
       </div>
-      <div>
+    </div>
+
+    <div class="form-row oferta-row oferta-row-2">
+      <div class="oferta-col oferta-col-curso">
         <label>Curso</label>
-        <select name="curso_id" id="curso-select" required>
+        <select name="curso_id" id="curso-select" class="guided-field" required>
+          <option value="" data-ch="" {% if not schedule %}selected{% endif %}>Selecione</option>
           {% for course in courses %}
             <option value="{{ course.id }}" data-ch="{{ course.carga_horaria_total }}" {% if schedule and schedule.curso_id == course.id %}selected{% endif %}>{{ course.nome }}</option>
           {% endfor %}
         </select>
       </div>
-      <div>
-        <label>Recurso/Tipo</label>
-        <input name="recurso_tipo" value="{{ schedule.recurso_tipo if schedule else '' }}" />
+      <div class="oferta-col oferta-col-ch">
+        <label>CH</label>
+        <input name="ch_total" id="ch-total" value="{{ schedule.ch_total if schedule else '' }}" readonly required maxlength="6" />
       </div>
-    </div>
-    <div class="form-row">
-      <div>
+      <div class="oferta-col oferta-col-data">
         <label>Data Inicial (DD/MM/AAAA)</label>
-        <input name="data_inicio" id="data-inicio" class="date-mask" value="{{ schedule.data_inicio if schedule else '' }}" required />
+        <input name="data_inicio" id="data-inicio" class="date-mask guided-field" value="{{ schedule.data_inicio if schedule else '' }}" required />
       </div>
-      <div>
+      <div class="oferta-col oferta-col-data">
         <label>Data Final (DD/MM/AAAA)</label>
         <input name="data_fim" id="data-fim" class="date-mask" value="{{ schedule.data_fim if schedule else '' }}" required />
       </div>
-      <div>
-        <label>CH</label>
-        <input name="ch_total" id="ch-total" value="{{ schedule.ch_total if schedule else '' }}" readonly required />
-      </div>
     </div>
-    <div class="form-row">
-      <div>
-        <label>Nº da Turma</label>
-        <input name="turma" id="turma" value="{{ schedule.turma if schedule else '' }}" placeholder="0000.00.000" pattern="\d{4}\.\d{2}\.\d{3}" inputmode="numeric" required />
-      </div>
-      <div>
+
+    <div class="form-row oferta-row oferta-row-3">
+      <div class="oferta-col oferta-col-hora">
         <label>Hora Inicial</label>
         <input name="hora_inicio" id="hora-inicio" class="time-field" value="{{ schedule.hora_inicio if schedule else '' }}" type="time" required />
       </div>
-      <div>
+      <div class="oferta-col oferta-col-hora">
         <label>Hora Final</label>
         <input name="hora_fim" id="hora-fim" class="time-field" value="{{ schedule.hora_fim if schedule else '' }}" type="time" required />
       </div>
-      <div>
+      <div class="oferta-col oferta-col-hs">
         <label>Hs/Dia</label>
         <input id="hs-dia" class="time-field" value="{{ schedule.hs_dia if schedule else '' }}" readonly />
       </div>
-    </div>
-    <div class="form-row">
-      <div>
+      <div class="oferta-col oferta-col-turma">
+        <label>Nº da Turma</label>
+        <input name="turma" id="turma" value="{{ schedule.turma if schedule else '' }}" placeholder="0000.00.000" pattern="\d{4}\.\d{2}\.\d{3}" inputmode="numeric" required />
+      </div>
+      <div class="oferta-col oferta-col-analista">
         <label>Analista</label>
-        <select name="analista_id" required>
+        <select name="analista_id" class="guided-field" required>
+          <option value="" {% if not schedule %}selected{% endif %}>Selecione</option>
           {% for collaborator in analysts %}
             <option value="{{ collaborator.id }}" {% if schedule and schedule.analista_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome_sobrenome }}</option>
           {% endfor %}
         </select>
       </div>
-      <div>
+      <div class="oferta-col oferta-col-instrutor">
         <label>Instrutor</label>
         {% set selected_instrutores = schedule.instrutor_ids if schedule and schedule.instrutor_ids else ([schedule.instrutor_id] if schedule and schedule.instrutor_id else []) %}
         <div id="instructors-list" class="instructors-list" data-count="{{ selected_instrutores|length if selected_instrutores else 1 }}">
           {% if selected_instrutores %}
             {% for selected_id in selected_instrutores %}
               <div class="instructor-row">
-                <select name="instrutor_ids" required>
+                <select name="instrutor_ids" class="guided-field" required>
                   <option value="">Selecione</option>
                   {% for collaborator in instructors %}
                     <option value="{{ collaborator.id }}" {% if selected_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome_sobrenome }}</option>
                   {% endfor %}
                 </select>
-                <button type="button" class="button ghost instructor-add">+</button>
+                <button type="button" class="button instructor-add instructor-add-primary">+</button>
                 <button type="button" class="button ghost instructor-remove">-</button>
               </div>
             {% endfor %}
           {% else %}
             <div class="instructor-row">
-              <select name="instrutor_ids" required>
+              <select name="instrutor_ids" class="guided-field" required>
                 <option value="">Selecione</option>
                 {% for collaborator in instructors %}
                   <option value="{{ collaborator.id }}">{{ collaborator.nome_sobrenome }}</option>
                 {% endfor %}
               </select>
-              <button type="button" class="button ghost instructor-add">+</button>
+              <button type="button" class="button instructor-add instructor-add-primary">+</button>
               <button type="button" class="button ghost instructor-remove">-</button>
             </div>
           {% endif %}
         </div>
       </div>
+      <div class="oferta-col oferta-col-assistente">
+        <label>Assistente</label>
+        <select name="assistente_id" class="guided-field">
+          <option value="" {% if not schedule or not schedule.assistente_id %}selected{% endif %}>Selecione</option>
+          {% for collaborator in assistants %}
+            <option value="{{ collaborator.id }}" {% if schedule and schedule.assistente_id == collaborator.id %}selected{% endif %}>{{ collaborator.nome_sobrenome }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
+
+    <div class="form-row oferta-row oferta-row-4">
+      <div class="oferta-col">
+        <label>Recurso/Tipo</label>
+        <input name="recurso_tipo" value="{{ schedule.recurso_tipo if schedule else '' }}" />
+      </div>
+      <div class="oferta-col">
+        <label>Programa/Parceria</label>
+        <input name="programa_parceria" value="{{ schedule.programa_parceria if schedule else '' }}" />
+      </div>
+    </div>
+
     <div class="form-row">
       <div>
         <label>Dias de execução</label>
@@ -161,13 +182,74 @@
         <textarea name="observacoes">{{ schedule.observacoes if schedule else '' }}</textarea>
       </div>
     </div>
-    <div id="end-date-alert" class="alert" role="alert" style="display: none;"></div>
+<div id="end-date-alert" class="alert" role="alert" style="display: none;"></div>
   </div>
   <div class="actions">
     <button class="button" type="submit">Salvar</button>
     <a class="button ghost" href="/programming">Cancelar</a>
   </div>
 </form>
+
+<style>
+  .oferta-row {
+    display: grid;
+    gap: 10px;
+    align-items: end;
+  }
+  .oferta-row .oferta-col > label {
+    white-space: nowrap;
+  }
+  .oferta-row-1 {
+    grid-template-columns: 130px minmax(280px, 1.1fr) 110px 110px;
+  }
+  .oferta-row-2 {
+    grid-template-columns: minmax(300px, 1.2fr) 90px 175px 175px;
+  }
+  .oferta-row-3 {
+    grid-template-columns: 115px 115px 90px 130px 1.1fr 1.4fr 1fr;
+  }
+  .oferta-row-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .oferta-col-ch input {
+    max-width: 90px;
+  }
+  input.guided-field,
+  select.guided-field,
+  textarea.guided-field {
+    background-color: #f5efe0 !important;
+    transition: background-color .15s ease;
+  }
+  input.guided-field.is-filled,
+  select.guided-field.is-filled,
+  textarea.guided-field.is-filled {
+    background-color: #fff !important;
+  }
+  .instructor-add-primary {
+    background: #2563eb;
+    border-color: #1d4ed8;
+    color: #fff;
+  }
+  .instructor-add-primary:hover {
+    background: #1d4ed8;
+  }
+  @media (max-width: 1200px) {
+    .oferta-row-1,
+    .oferta-row-2,
+    .oferta-row-3,
+    .oferta-row-4 {
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+    }
+  }
+  @media (max-width: 700px) {
+    .oferta-row-1,
+    .oferta-row-2,
+    .oferta-row-3,
+    .oferta-row-4 {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
 
 <script>
   const ambienteSelect = document.getElementById("ambiente-select");
@@ -180,11 +262,14 @@
   const horaFimInput = document.getElementById("hora-fim");
   const hsDiaInput = document.getElementById("hs-dia");
   const turmaInput = document.getElementById("turma");
+  const scheduleIdInput = document.getElementById("schedule-id");
   const anoInput = document.getElementById("ano");
+  const scheduleForm = document.getElementById("schedule-form");
   const dataInicioInput = document.getElementById("data-inicio");
   const dataFimInput = document.getElementById("data-fim");
   const endDateAlert = document.getElementById("end-date-alert");
   const instructorsList = document.getElementById("instructors-list");
+  const isNewSchedule = scheduleForm?.dataset?.isNew === "1";
 
   function updateInstructorButtons() {
     const rows = Array.from(instructorsList.querySelectorAll(".instructor-row"));
@@ -200,8 +285,8 @@
     const row = document.createElement("div");
     row.className = "instructor-row";
     row.innerHTML = `
-      <select name="instrutor_ids" required>${firstSelect ? firstSelect.innerHTML : ""}</select>
-      <button type="button" class="button ghost instructor-add">+</button>
+      <select name="instrutor_ids" class="guided-field" required>${firstSelect ? firstSelect.innerHTML : ""}</select>
+      <button type="button" class="button instructor-add instructor-add-primary">+</button>
       <button type="button" class="button ghost instructor-remove">-</button>
     `;
     const select = row.querySelector("select[name='instrutor_ids']");
@@ -209,6 +294,14 @@
       select.value = selectedValue;
     }
     return row;
+  }
+
+  function refreshGuidedFieldState() {
+    if (!scheduleForm) return;
+    scheduleForm.querySelectorAll(".guided-field").forEach((field) => {
+      const value = String(field.value || "").trim();
+      field.classList.toggle("is-filled", value !== "");
+    });
   }
 
   function handleInstructorButtons(event) {
@@ -223,6 +316,7 @@
       const newRow = buildInstructorRow();
       instructorsList.appendChild(newRow);
       updateInstructorButtons();
+      refreshGuidedFieldState();
       return;
     }
 
@@ -232,6 +326,7 @@
         row.remove();
       }
       updateInstructorButtons();
+      refreshGuidedFieldState();
     }
   }
 
@@ -319,6 +414,38 @@
     turmaInput.value = masked;
   }
 
+  function limparFormularioNovaOferta() {
+    if (!isNewSchedule || !scheduleForm) return;
+    // Mantem apenas os campos automÃ¡ticos (ID/Ano) e limpa os demais.
+    const preserveIds = new Set(["schedule-id"]);
+    scheduleForm.querySelectorAll("input, textarea, select").forEach((field) => {
+      const tag = field.tagName.toLowerCase();
+      const type = (field.type || "").toLowerCase();
+      if (preserveIds.has(field.id || "")) return;
+      if (field.name === "schedule_id") return;
+      if (type === "checkbox") {
+        field.checked = false;
+        return;
+      }
+      if (tag === "select") {
+        field.selectedIndex = 0;
+        return;
+      }
+      field.value = "";
+    });
+    if (instructorsList) {
+      const rows = Array.from(instructorsList.querySelectorAll(".instructor-row"));
+      rows.forEach((row, idx) => {
+        if (idx > 0) row.remove();
+      });
+      const firstSelect = instructorsList.querySelector("select[name='instrutor_ids']");
+      if (firstSelect) firstSelect.selectedIndex = 0;
+      updateInstructorButtons();
+    }
+    showEndDateAlert("", false);
+    refreshGuidedFieldState();
+  }
+
   function showEndDateAlert(message, isError = false) {
     if (!endDateAlert) return;
     if (!message) {
@@ -360,7 +487,7 @@
 
     if (!validarData(dataInicioInput)) {
       dataFimInput.readOnly = false;
-      showEndDateAlert("Informe uma data inicial válida para calcular a data final.", true);
+      showEndDateAlert("Informe uma data inicial vÃ¡lida para calcular a data final.", true);
       return;
     }
 
@@ -377,15 +504,31 @@
       const payload = await response.json();
       if (!response.ok) {
         dataFimInput.readOnly = false;
-        showEndDateAlert(payload.error || "Não foi possível calcular a data final.", true);
+        showEndDateAlert(payload.error || "NÃ£o foi possÃ­vel calcular a data final.", true);
         return;
       }
       dataFimInput.value = payload.end_date || "";
       dataFimInput.readOnly = true;
-      showEndDateAlert("Data final calculada automaticamente com base no calendário.", false);
+      showEndDateAlert("Data final calculada automaticamente com base no calendÃ¡rio.", false);
     } catch (error) {
       dataFimInput.readOnly = false;
       showEndDateAlert("Falha ao calcular a data final. Tente novamente.", true);
+    }
+  }
+
+  async function atualizarIdOferta() {
+    if (!isNewSchedule || !scheduleIdInput || !anoInput) return;
+    const year = anoInput.value.trim();
+    if (!/^\d{4}$/.test(year)) return;
+    try {
+      const response = await fetch(`/programming/next-offer-id?year=${encodeURIComponent(year)}`);
+      const payload = await response.json();
+      if (!response.ok) return;
+      if (payload.offer_id) {
+        scheduleIdInput.value = payload.offer_id;
+      }
+    } catch (_error) {
+      // Mantem a ID atual se a consulta falhar.
     }
   }
 
@@ -421,11 +564,18 @@
   turmaInput.addEventListener("input", aplicarMascaraTurma);
   aplicarMascaraTurma();
 
-  atualizarAmbiente();
-  atualizarCurso();
-  atualizarTurno();
-  calcularHsDia();
-  atualizarDataFinal();
+  if (isNewSchedule) {
+    limparFormularioNovaOferta();
+    calcularHsDia();
+    atualizarIdOferta();
+  } else {
+    atualizarAmbiente();
+    atualizarCurso();
+    atualizarTurno();
+    calcularHsDia();
+    atualizarDataFinal();
+  }
+  refreshGuidedFieldState();
 
   document.getElementById("schedule-form").addEventListener("submit", (event) => {
     const invalidDates = Array.from(document.querySelectorAll(".date-mask")).some(
@@ -446,7 +596,10 @@
   });
 
   dataInicioInput.addEventListener("input", atualizarDataFinal);
-  anoInput.addEventListener("input", atualizarDataFinal);
+  anoInput.addEventListener("input", () => {
+    atualizarDataFinal();
+    atualizarIdOferta();
+  });
 
   document.querySelectorAll("input[name='dias_execucao']").forEach((input) => {
     input.addEventListener("change", atualizarDataFinal);
@@ -456,5 +609,20 @@
     instructorsList.addEventListener("click", handleInstructorButtons);
     updateInstructorButtons();
   }
+  if (scheduleForm) {
+    scheduleForm.addEventListener("input", refreshGuidedFieldState);
+    scheduleForm.addEventListener("change", refreshGuidedFieldState);
+  }
+  atualizarIdOferta();
+
+  // Evita restauraÃ§Ã£o de valores antigos quando a pÃ¡gina volta do cache do navegador.
+  window.addEventListener("pageshow", (event) => {
+    if (!isNewSchedule) return;
+    if (event.persisted) {
+      limparFormularioNovaOferta();
+      atualizarIdOferta();
+    }
+  });
 </script>
 {% endblock %}
+
