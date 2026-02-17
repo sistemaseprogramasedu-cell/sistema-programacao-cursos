@@ -1,33 +1,332 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
+{% set title = "Mapa de Sala" %}
 {% block content %}
-<div class="cards">
-  <div class="card">
-    <h3>Cursos</h3>
-    <strong>{{ counts.courses }}</strong>
-  </div>
-  <div class="card">
-    <h3>UCs</h3>
-    <strong>{{ counts.units }}</strong>
-  </div>
-  <div class="card">
-    <h3>Colaboradores</h3>
-    <strong>{{ counts.instructors }}</strong>
-  </div>
-  <div class="card">
-    <h3>Ambientes</h3>
-    <strong>{{ counts.rooms }}</strong>
-  </div>
-  <div class="card">
-    <h3>Turnos</h3>
-    <strong>{{ counts.shifts }}</strong>
-  </div>
-  <div class="card">
-    <h3>Calendários</h3>
-    <strong>{{ counts.calendars }}</strong>
-  </div>
-  <div class="card">
-    <h3>Programação</h3>
-    <strong>{{ counts.schedules }}</strong>
+<div class="roommap-page">
+  <header class="roommap-header">
+    <h1 class="roommap-title">Mapa de Sala</h1>
+
+    <form class="roommap-filters no-print" method="get" action="/">
+      <div class="field medium">
+        <label>Pavimento</label>
+        <select name="pavimento" onchange="this.form.submit()">
+          {% for floor in floor_options %}
+            <option value="{{ floor }}" {% if selected_floor == floor %}selected{% endif %}>{{ floor }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field medium">
+        <label>Turno</label>
+        <select name="turno_id" onchange="this.form.submit()">
+          {% for shift in shifts %}
+            <option value="{{ shift.id }}" {% if selected_turno_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+
+    <div class="occupancy-badge" title="Percentual de ocupacao dos ambientes ativos">
+      <span>Ocupacao</span>
+      <strong>{{ "%.1f"|format(occupancy_pct)|replace(".", ",") }}%</strong>
+    </div>
+  </header>
+
+  <div class="roommap-body">
+    <aside class="roommap-side">
+      <section class="side-card">
+        <h3>CONTEXTO</h3>
+        <div class="meta-row">
+          <span>Pavimento</span>
+          <strong>{{ selected_floor or "-" }}</strong>
+        </div>
+        <div class="meta-row">
+          <span>Turno</span>
+          <strong>{{ selected_turno_nome or "-" }}</strong>
+        </div>
+      </section>
+
+      <section class="side-card">
+        <h3>Legenda</h3>
+        <div class="legend-item"><span class="dot occupied"></span> Ocupado</div>
+        <div class="legend-item"><span class="dot free"></span> Livre</div>
+        <div class="legend-item"><span class="dot inactive"></span> Inativo</div>
+      </section>
+    </aside>
+
+    <section class="roommap-main">
+      <div class="roommap-grid">
+        {% for row in room_rows %}
+          <div class="roommap-row" style="--cols: {{ map_columns or row|length }};">
+            {% for room in row %}
+              {% if room.placeholder %}
+                <div class="room-placeholder" aria-hidden="true"></div>
+              {% else %}
+                <article class="room-card status-{{ room.status }}">
+                  <h4>{{ room.label }}</h4>
+                  {% if room.status == "inactive" %}
+                    <p class="inactive-title">Inativo</p>
+                    <p class="inactive-icon">&#9881;</p>
+                  {% else %}
+                    <p>{{ room.instructor }}</p>
+                    <p>{{ room.turma }}</p>
+                    <p>{{ room.course }}</p>
+                  {% endif %}
+                </article>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
   </div>
 </div>
+
+<style>
+  .roommap-page {
+    display: grid;
+    gap: 20px;
+    padding: 24px;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background:
+      radial-gradient(circle at 90% 0%, rgba(255, 255, 255, 0.36) 0%, transparent 34%),
+      radial-gradient(circle at 12% 14%, rgba(255, 255, 255, 0.26) 0%, transparent 28%),
+      linear-gradient(135deg, #d8e7f5 0%, #a8c2e7 52%, #9ab5e0 100%);
+    box-shadow: 0 18px 44px rgba(13, 30, 57, 0.2);
+  }
+
+  .roommap-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .roommap-title {
+    margin: 0;
+    text-align: center;
+    grid-column: 1 / -1;
+    color: #0f2342;
+    font-size: clamp(40px, 6vw, 64px);
+    font-weight: 900;
+    letter-spacing: 0.3px;
+  }
+
+  .roommap-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    grid-column: 1 / -1;
+  }
+
+  .occupancy-badge {
+    justify-self: end;
+    margin-top: -88px;
+    min-width: 146px;
+    border-radius: 22px;
+    padding: 10px 16px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(15, 35, 66, 0.2);
+    box-shadow: 0 10px 28px rgba(16, 36, 67, 0.14);
+  }
+
+  .occupancy-badge span {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    color: #1c3558;
+  }
+
+  .occupancy-badge strong {
+    display: block;
+    line-height: 1.1;
+    font-size: 34px;
+    color: #0f2342;
+  }
+
+  .roommap-body {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .roommap-side {
+    display: grid;
+    gap: 12px;
+  }
+
+  .side-card {
+    border-radius: 12px;
+    border: 1px solid rgba(19, 41, 72, 0.22);
+    background: rgba(255, 255, 255, 0.52);
+    backdrop-filter: blur(4px);
+    padding: 10px;
+  }
+
+  .side-card h3 {
+    margin: 0 0 8px;
+    color: #0f2342;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .meta-row {
+    display: grid;
+    gap: 1px;
+    margin-bottom: 8px;
+  }
+
+  .meta-row span {
+    font-size: 12px;
+    color: #2a476f;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .meta-row strong {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: #102745;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 6px;
+    font-size: 16px;
+    color: #18365d;
+  }
+
+  .dot {
+    width: 17px;
+    height: 17px;
+    border-radius: 999px;
+    border: 1.5px solid #1f2937;
+    flex-shrink: 0;
+  }
+
+  .dot.occupied {
+    background: #f5a04d;
+  }
+
+  .dot.free {
+    background: #f2f3f7;
+  }
+
+  .dot.inactive {
+    background: #f8b4b4;
+  }
+
+  .roommap-main {
+    min-width: 0;
+  }
+
+  .roommap-grid {
+    display: grid;
+    gap: 12px;
+  }
+
+  .roommap-row {
+    display: grid;
+    grid-template-columns: repeat(var(--cols), minmax(128px, 1fr));
+    gap: 12px;
+  }
+
+  .room-card {
+    min-height: 142px;
+    border: none;
+    border-radius: 14px;
+    padding: 12px 10px;
+    text-align: center;
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    box-shadow:
+      0 8px 18px rgba(17, 38, 66, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  }
+
+  .room-card h4 {
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: #0f2342;
+  }
+
+  .room-card p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.25;
+    color: #1f3b61;
+  }
+
+  .room-card.status-occupied {
+    background: linear-gradient(160deg, #f7d2a8 0%, #f4c18c 100%);
+  }
+
+  .room-card.status-free {
+    background: linear-gradient(160deg, #f4f6fb 0%, #eceff5 100%);
+  }
+
+  .room-card.status-inactive {
+    background: linear-gradient(160deg, #f8c9c9 0%, #f5b2b2 100%);
+  }
+
+  .room-placeholder {
+    min-height: 142px;
+    border-radius: 14px;
+    visibility: hidden;
+  }
+
+  .inactive-title {
+    font-size: 19px;
+    font-weight: 900;
+    color: #7f1d1d;
+    margin-top: 2px;
+  }
+
+  .inactive-icon {
+    font-size: 34px;
+    color: #7f1d1d;
+    line-height: 1;
+  }
+
+  @media (max-width: 1200px) {
+    .roommap-body {
+      grid-template-columns: 1fr;
+    }
+
+    .roommap-row {
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 7px;
+    }
+
+    .occupancy-badge {
+      margin-top: 0;
+      grid-column: 1 / -1;
+      justify-self: center;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .roommap-page {
+      padding: 16px;
+      border-radius: 16px;
+    }
+
+    .roommap-title {
+      font-size: 34px;
+    }
+
+    .meta-row strong {
+      font-size: 17px;
+    }
+  }
+</style>
 {% endblock %}
+

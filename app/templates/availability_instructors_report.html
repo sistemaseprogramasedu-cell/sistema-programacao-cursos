@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% set title = "Relatório - Disponibilidade de Instrutores" %}
+{% block content %}
+<div class="panel">
+  <div class="panel-header">
+    <h3>Relatório de Disponibilidade de Instrutores</h3>
+  </div>
+
+  <div class="actions inline-actions" style="margin-bottom: 10px;">
+    <button class="button secondary no-print" type="button" onclick="window.print()">Imprimir</button>
+    <a class="button secondary no-print" href="/availability/instructors">Voltar</a>
+  </div>
+
+  <form class="filters filters-inline" method="get" action="/availability/instructors/report">
+    <div class="field medium">
+      <label>Do dia</label>
+      <input type="date" name="date_from" value="{{ selected_from }}" required />
+    </div>
+    <div class="field medium">
+      <label>Até o dia</label>
+      <input type="date" name="date_to" value="{{ selected_to }}" required />
+    </div>
+    <div class="field medium">
+      <label>Turno</label>
+      <select name="shift_id">
+        <option value="">Todos</option>
+        {% for shift in shifts %}
+          <option value="{{ shift.id }}" {% if selected_shift_id == shift.id %}selected{% endif %}>{{ shift.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field medium">
+      <label>Status</label>
+      <select name="status">
+        <option value="all" {% if selected_status == "all" %}selected{% endif %}>Todos</option>
+        <option value="free" {% if selected_status == "free" %}selected{% endif %}>Livre</option>
+        <option value="occupied" {% if selected_status == "occupied" %}selected{% endif %}>Ocupado</option>
+      </select>
+    </div>
+    <div class="actions inline-actions inline-actions-filters">
+      <button class="button" type="submit">Filtrar</button>
+      <a class="button ghost" href="/availability/instructors/report">Limpar</a>
+    </div>
+  </form>
+
+  <div class="availability-head">
+    <div><strong>Total:</strong> {{ total }}</div>
+    <div><strong>Ocupados:</strong> {{ occupied_count }}</div>
+    <div><strong>Livres:</strong> {{ free_count }}</div>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Instrutor</th>
+          <th>Status</th>
+          <th>Qtd. Agendamentos</th>
+          <th>Turno (1º)</th>
+          <th>Período (1º)</th>
+          <th>Turma (1º)</th>
+          <th>Ambiente (1º)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>{{ row.nome }}</td>
+            <td>
+              <span class="tag {{ 'error' if row.status == 'occupied' else 'success' }}">
+                {{ "Ocupado" if row.status == "occupied" else "Livre" }}
+              </span>
+            </td>
+            <td>{{ row.agendamentos }}</td>
+            <td>{{ row.turno }}</td>
+            <td>{{ row.periodo }}</td>
+            <td>{{ row.turma }}</td>
+            <td>{{ row.ambiente }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="7">Nenhum resultado para os filtros aplicados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  .availability-head {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 10px 0 14px;
+    font-size: 13px;
+  }
+  .tag.success {
+    background: #dcfce7;
+    color: #166534;
+  }
+  .tag.error {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  @media print {
+    .no-print,
+    .filters,
+    .topbar,
+    .sidebar {
+      display: none !important;
+    }
+    .panel {
+      box-shadow: none !important;
+      border: none !important;
+      padding: 0 !important;
+    }
+  }
+</style>
+{% endblock %}

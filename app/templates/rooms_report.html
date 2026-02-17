@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% set title = "Relatório de Ambientes" %}
+{% block content %}
+<div class="panel">
+  <div class="panel-header">
+    <h3>Relatório de Ambientes</h3>
+  </div>
+
+  <div class="actions no-print">
+    <button class="button secondary" type="button" onclick="window.print()">Imprimir</button>
+    <form method="get" action="/rooms/report" class="inline-organize-form">
+      <label for="organize" class="inline-label">Organizar</label>
+      <select name="organize" id="organize" onchange="this.form.submit()">
+        <option value="floor" {% if organize_mode == "floor" %}selected{% endif %}>Por Pavimento</option>
+        <option value="alpha" {% if organize_mode == "alpha" %}selected{% endif %}>Ordem Alfabética</option>
+        <option value="capacity" {% if organize_mode == "capacity" %}selected{% endif %}>Ordem crescente de capacidade</option>
+      </select>
+    </form>
+    <a class="button ghost" href="/rooms">Voltar</a>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nome</th>
+          <th>Abreviação</th>
+          <th>Capacidade</th>
+          <th>Pavimento</th>
+          <th>Recursos</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for room in rooms %}
+          <tr>
+            <td>{{ room.id }}</td>
+            <td>{{ room.nome }}</td>
+            <td>{{ room.abreviacao or "—" }}</td>
+            <td>{{ room.capacidade }}</td>
+            <td>{{ room.pavimento }}</td>
+            <td>{{ room.recursos | join(", ") if room.recursos else "—" }}</td>
+            <td>{{ "Ativo" if room.ativo else "Inativo" }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="7">Nenhum ambiente cadastrado.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="print-summary">
+    <h4>Totais por pavimento</h4>
+    <table class="table print-summary-table">
+      <thead>
+        <tr>
+          <th>Pavimento</th>
+          <th>Total de Ambientes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in floor_totals %}
+          <tr>
+            <td>{{ row.pavimento }}</td>
+            <td>{{ row.total }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="print-total-geral"><strong>Total geral:</strong> {{ total_rooms }}</p>
+  </div>
+</div>
+
+<style>
+  .inline-organize-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .inline-label {
+    font-size: 13px;
+    color: #475569;
+    white-space: nowrap;
+  }
+  .inline-organize-form select {
+    min-width: 240px;
+  }
+  .print-summary {
+    margin-top: 14px;
+    display: none;
+  }
+  .print-summary-table {
+    max-width: 420px;
+  }
+  .print-total-geral {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+  @media print {
+    .no-print,
+    .sidebar,
+    .topbar,
+    .flash-area {
+      display: none !important;
+    }
+    .content,
+    .page {
+      padding: 0 !important;
+    }
+    .panel {
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+    }
+    .print-summary {
+      display: block !important;
+    }
+  }
+</style>
+{% endblock %}

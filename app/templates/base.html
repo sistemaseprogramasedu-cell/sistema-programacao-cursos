@@ -42,9 +42,17 @@
   </div>
 
   <!-- Grupo 2: Cadastros -->
-  <div class="nav-group">
-    <div class="nav-section">Cadastros</div>
+  <div class="nav-group nav-collapsible" data-group-id="cadastros">
+    <button class="nav-section-toggle" type="button" aria-expanded="true">
+      <span class="nav-section">Cadastros</span>
+      <span class="nav-chevron" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </span>
+    </button>
 
+    <div class="nav-items">
     <a href="/courses" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
         <!-- Ã­cone sÃ©rio: book -->
@@ -106,19 +114,28 @@
 
     <!-- divisor logo abaixo do CalendÃ¡rio -->
     <div class="nav-divider"></div>
+    </div>
   </div>
 
   <!-- Grupo 2.5: Disponibilidade -->
-  <div class="nav-group">
-    <div class="nav-section">Disponibilidade</div>
+  <div class="nav-group nav-collapsible" data-group-id="disponibilidade">
+    <button class="nav-section-toggle" type="button" aria-expanded="true">
+      <span class="nav-section">Disponibilidade</span>
+      <span class="nav-chevron" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </span>
+    </button>
 
+    <div class="nav-items">
     <a href="/availability/instructors" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/>
           <circle cx="9" cy="7" r="3"/>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-          <path d="M16 3.13a3 3 0 0 1 0 5.74"/>
+          <path d="M3 21v-1a5 5 0 0 1 5-5h2"/>
+          <circle cx="17" cy="17" r="4"/>
+          <path d="M17 15.5v1.8l1.3 1.3"/>
         </svg>
       </span>
       <span class="nav-text">Instrutores</span>
@@ -127,22 +144,32 @@
     <a href="/availability/rooms" class="nav-link">
       <span class="nav-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 22h18"/>
-          <path d="M6 22V4a1 1 0 0 1 1-1h6v19"/>
-          <path d="M13 7h4a1 1 0 0 1 1 1v14"/>
-          <path d="M9 7h1M9 11h1M9 15h1M16 11h1M16 15h1"/>
+          <path d="M4 21h11"/>
+          <path d="M6 21V6a1 1 0 0 1 1-1h6v16"/>
+          <path d="M9 9h1M9 12h1M9 15h1"/>
+          <circle cx="18" cy="17" r="4"/>
+          <path d="M18 15.5v1.8l1.3 1.3"/>
         </svg>
       </span>
       <span class="nav-text">Ambientes</span>
     </a>
 
     <div class="nav-divider"></div>
+    </div>
   </div>
 
   <!-- Grupo 3: ProgramaÃ§Ã£o -->
-  <div class="nav-group">
-    <div class="nav-section">ProgramaÃ§Ã£o</div>
+  <div class="nav-group nav-collapsible" data-group-id="programacao">
+    <button class="nav-section-toggle" type="button" aria-expanded="true">
+      <span class="nav-section">ProgramaÃ§Ã£o</span>
+      <span class="nav-chevron" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </span>
+    </button>
 
+    <div class="nav-items">
     <a href="/programming" class="nav-link nav-primary">
       <span class="nav-icon" aria-hidden="true">
         <!-- Ã­cone sÃ©rio e correto: clipboard/list (sem â€œIAâ€) -->
@@ -165,6 +192,7 @@
       </span>
       <span class="nav-text">Cronogramas</span>
     </a>
+    </div>
   </div>
 
 </nav>
@@ -198,7 +226,45 @@
         const href = (a.getAttribute("href") || "").replace(/\/+$/, "") || "/";
         if (href === path) a.classList.add("active");
       });
+
+      const storageKey = "flow.sidebar.collapsedGroups";
+      let collapsedById = {};
+      try {
+        const raw = localStorage.getItem(storageKey);
+        collapsedById = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        collapsedById = {};
+      }
+
+      document.querySelectorAll(".nav-group.nav-collapsible").forEach(group => {
+        const groupId = group.getAttribute("data-group-id");
+        const toggle = group.querySelector(".nav-section-toggle");
+        const items = group.querySelector(".nav-items");
+        if (!groupId || !toggle || !items) return;
+
+        const hasActiveLink = !!group.querySelector(".nav-link.active");
+        const shouldCollapse = !hasActiveLink && collapsedById[groupId] === true;
+
+        const applyState = (collapsed) => {
+          group.classList.toggle("is-collapsed", collapsed);
+          items.hidden = collapsed;
+          toggle.setAttribute("aria-expanded", String(!collapsed));
+        };
+
+        applyState(shouldCollapse);
+
+        toggle.addEventListener("click", () => {
+          const collapsed = !group.classList.contains("is-collapsed");
+          applyState(collapsed);
+          collapsedById[groupId] = collapsed;
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(collapsedById));
+          } catch (_) {}
+        });
+      });
     })();
   </script>
 </body>
 </html>
+
+

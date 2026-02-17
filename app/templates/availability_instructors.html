@@ -5,6 +5,11 @@
   <div class="panel-header">
     <h3>Disponibilidade de Instrutores</h3>
   </div>
+  {% if not shared_mode %}
+    <div class="actions inline-actions" style="margin-bottom: 10px;">
+      <a class="button ghost" href="/availability/instructors/report">Relatório</a>
+    </div>
+  {% endif %}
 
   {% if not shared_mode %}
     <form class="filters filters-inline" method="get" action="/availability/instructors" id="availabilityFilterForm">
@@ -47,6 +52,8 @@
     <div class="availability-head">
       <div><strong>Instrutor:</strong> {{ selected_instructor.nome_sobrenome or selected_instructor.nome }}</div>
       <div><strong>Período:</strong> {{ selected_period_label }} / {{ selected_year }}</div>
+      <div><strong>Slots ocupados (programação):</strong> {{ occupied_slots_count }}</div>
+      <div><strong>Slots marcados manualmente:</strong> {{ manual_slots_count }}</div>
       {% if not shared_mode %}
         <div><strong>Status:</strong> {{ "Respondido" if share_status == "respondido" else "Enviado" if share_status == "enviado" else "Não enviado" }}</div>
       {% endif %}
@@ -96,10 +103,11 @@
                 </td>
                 {% for day in weekdays %}
                   {% set key = day ~ "|" ~ shift.id %}
+                  {% set is_occupied = key in occupied_slots %}
                   <td class="check-cell">
                     <label class="checkbox-item check-center">
-                      <input type="checkbox" name="slots" value="{{ key }}" {% if key in selected_slots %}checked{% endif %} />
-                      <span>Disp.</span>
+                      <input type="checkbox" name="slots" value="{{ key }}" {% if key in selected_slots %}checked{% endif %} {% if is_occupied %}disabled{% endif %} />
+                      <span>{{ "Ocup." if is_occupied else "Disp." }}</span>
                     </label>
                   </td>
                 {% endfor %}

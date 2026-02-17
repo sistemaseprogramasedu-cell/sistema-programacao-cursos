@@ -5,7 +5,92 @@
   <div class="panel-header">
     <h3>Disponibilidade de Ambientes</h3>
   </div>
-  <p>Esta área está preparada para a próxima etapa de implementação.</p>
-  <p>Planejado: bloqueios por manutenção, reserva externa e janelas de indisponibilidade por período.</p>
+
+  <div class="actions inline-actions" style="margin-bottom: 14px;">
+    <a class="button {{ '' if selected_view == 'current' else 'secondary' }}" href="/availability/rooms?view=current">Ver lotação atual</a>
+    <a class="button {{ '' if selected_view == 'free' else 'secondary' }}" href="/availability/rooms?view=free">Ver salas livres</a>
+    <a class="button ghost" href="/availability/rooms/report">Relatório</a>
+  </div>
+
+  <div class="availability-head">
+    <div><strong>Data/Hora de referência:</strong> {{ now_label }}</div>
+    <div><strong>Total de ambientes:</strong> {{ total_rooms }}</div>
+    <div><strong>Ocupados agora:</strong> {{ total_occupied }}</div>
+    <div><strong>Livres agora:</strong> {{ total_free }}</div>
+  </div>
+
+  {% if selected_view == "current" %}
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Ambiente</th>
+            <th>Pavimento</th>
+            <th>Capacidade</th>
+            <th>Curso</th>
+            <th>Instrutor</th>
+            <th>Turma</th>
+            <th>Turno</th>
+            <th>Horário</th>
+            <th>Período</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in occupied_now %}
+            <tr>
+              <td>{{ row.ambiente }}</td>
+              <td>{{ row.pavimento }}</td>
+              <td>{{ row.capacidade }}</td>
+              <td>{{ row.curso }}</td>
+              <td>{{ row.instrutor }}</td>
+              <td>{{ row.turma }}</td>
+              <td>{{ row.turno }}</td>
+              <td>{{ row.horario }}</td>
+              <td>{{ row.periodo }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="9">Nenhum ambiente ocupado.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Ambiente</th>
+            <th>Pavimento</th>
+            <th>Capacidade</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in free_now %}
+            <tr>
+              <td>{{ row.ambiente }}</td>
+              <td>{{ row.pavimento }}</td>
+              <td>{{ row.capacidade }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="3">Nenhum ambiente livre neste momento.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
 </div>
+
+<style>
+  .availability-head {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 10px 0 14px;
+    font-size: 13px;
+  }
+</style>
 {% endblock %}

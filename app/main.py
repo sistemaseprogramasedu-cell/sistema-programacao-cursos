@@ -2,15 +2,18 @@
 
 import calendar as calendar_module
 import colorsys
+import io
 import json
 import math
 import re
 import secrets
+import unicodedata
+import zipfile
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -534,21 +537,289 @@ def _compute_schedule_end_date(
     return end_date.strftime("%d/%m/%Y"), None
 
 
-@app.get("/")
-def dashboard(request: Request):
+def _build_room_map_view(pavimento: str = "", turno_id: str = "") -> Dict[str, Any]:
+    rooms_all = list_rooms()
+    shifts = [item for item in list_shifts() if item.get("ativo", True)]
+    schedules = list_schedules()
+    courses = list_courses()
+    instructors = list_instructors()
 
+    floor_options = sorted(
+        {
+            str(item.get("pavimento") or "").strip()
+            for item in rooms_all
+            if str(item.get("pavimento") or "").strip()
+        }
+    )
+    selected_floor = str(pavimento or "").strip()
+    if selected_floor not in floor_options:
+        selected_floor = floor_options[0] if floor_options else ""
+
+    selected_turno_id = str(turno_id or "").strip()
+    shift_ids = {str(item.get("id") or "").strip() for item in shifts}
+    if selected_turno_id not in shift_ids:
+        selected_turno_id = str(shifts[0].get("id") or "").strip() if shifts else ""
+    shift_map = {str(item.get("id") or "").strip(): item for item in shifts}
+    selected_shift = shift_map.get(selected_turno_id)
+
+    course_map = {str(item.get("id") or "").strip(): item for item in courses}
+    instructor_map = {str(item.get("id") or "").strip(): item for item in instructors}
+
+    rooms_filtered = [
+        item
+        for item in rooms_all
+        if (not selected_floor) or (str(item.get("pavimento") or "").strip() == selected_floor)
+    ]
+    rooms_filtered.sort(
+        key=lambda item: (
+            str(item.get("abreviacao") or "").strip() or str(item.get("nome") or ""),
+            str(item.get("nome") or ""),
+        )
+    )
+
+    def _schedule_for_room(room_id: str) -> Optional[Dict[str, Any]]:
+        candidates: List[Dict[str, Any]] = []
+        for schedule in schedules:
+            if str(schedule.get("sala_id") or "").strip() != room_id:
+                continue
+            if selected_turno_id and str(schedule.get("turno_id") or "").strip() != selected_turno_id:
+                continue
+            candidates.append(schedule)
+        if not candidates:
+            return None
+        candidates.sort(
+            key=lambda item: (
+                _parse_br_date(str(item.get("data_inicio") or "")) or date.min,
+                str(item.get("id") or ""),
+            ),
+            reverse=True,
+        )
+        return candidates[0]
+
+    map_rooms: List[Dict[str, Any]] = []
+    occupied_count = 0
+    available_count = 0
+    inactive_count = 0
+
+    for room in rooms_filtered:
+        room_id = str(room.get("id") or "").strip()
+        is_active = bool(room.get("ativo", True))
+        label = str(room.get("abreviacao") or "").strip() or str(room.get("nome") or "").strip() or room_id
+
+        if not is_active:
+            status = "inactive"
+            inactive_count += 1
+            map_rooms.append(
+                {
+                    "id": room_id,
+                    "label": label,
+                    "status": status,
+                    "instructor": "—",
+                    "analista": "—",
+                    "turma": "—",
+                    "course": "Inativo",
+                    "periodo": "—",
+                }
+            )
+            continue
+
+        selected_schedule = _schedule_for_room(room_id)
+        if selected_schedule:
+            status = "occupied"
+            occupied_count += 1
+            instructor_ids = [str(v).strip() for v in (selected_schedule.get("instrutor_ids") or []) if str(v).strip()]
+            primary_id = str(selected_schedule.get("instrutor_id") or "").strip()
+            if primary_id and primary_id not in instructor_ids:
+                instructor_ids.insert(0, primary_id)
+            instructor_names: List[str] = []
+            for iid in instructor_ids:
+                instructor = instructor_map.get(iid)
+                if not instructor:
+                    continue
+                name = instructor.get("nome_sobrenome") or instructor.get("nome") or iid
+                if name not in instructor_names:
+                    instructor_names.append(name)
+            analyst = instructor_map.get(str(selected_schedule.get("analista_id") or "").strip())
+            course = course_map.get(str(selected_schedule.get("curso_id") or "").strip())
+            map_rooms.append(
+                {
+                    "id": room_id,
+                    "label": label,
+                    "status": status,
+                    "instructor": ", ".join(instructor_names) if instructor_names else "—",
+                    "analista": (
+                        analyst.get("nome_sobrenome") or analyst.get("nome") or "—"
+                    ) if analyst else "—",
+                    "turma": selected_schedule.get("turma") or "—",
+                    "course": (course.get("nome") if course else "—"),
+                    "periodo": f"{selected_schedule.get('data_inicio') or '—'} a {selected_schedule.get('data_fim') or '—'}",
+                }
+            )
+        else:
+            status = "free"
+            available_count += 1
+            map_rooms.append(
+                {
+                    "id": room_id,
+                    "label": label,
+                    "status": status,
+                    "instructor": "—",
+                    "analista": "—",
+                    "turma": "—",
+                    "course": "Livre",
+                    "periodo": "—",
+                }
+            )
+
+    def _room_key(text: str) -> str:
+        normalized = unicodedata.normalize("NFKD", str(text or ""))
+        ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+        return re.sub(r"[^A-Z0-9]", "", ascii_text.upper())
+
+    rooms_by_key: Dict[str, Dict[str, Any]] = {}
+    for item in map_rooms:
+        room_label = str(item.get("label") or "")
+        keys = {_room_key(room_label)}
+        if " " in room_label:
+            keys.add(_room_key(room_label.replace(" ", "")))
+        for k in keys:
+            if k and k not in rooms_by_key:
+                rooms_by_key[k] = item
+
+    floor_layouts: Dict[str, List[List[Optional[str]]]] = {
+        "TERREO": [
+            ["REDES", "LABMAC", "LABTEC3", "LABTEC2", "LABTEC1", "LABGAMES"],
+            ["AUDIO", "CONHEC4", "CONHEC3", "CONHEC2", "CONHEC1", None],
+        ],
+        "1PISO": [
+            ["HARDWARE", "EDICAO", "LABTEC5", "LABTEC4", "CONHEC5"],
+            ["FOTO", "MODA", "OPTICA", "COMPART", "AUDITORIO"],
+        ],
+    }
+    alias_map: Dict[str, List[str]] = {
+        "AUDIO": ["ESTAUDIO", "AUDIO", "ESTUDIOAUDIO"],
+        "FOTO": ["ESTFOTO", "ESTUDIOFOTO", "FOTOGRAFIA", "ESTUDIODEFOTOGRAFIA"],
+        "COMPART": ["COMPART", "COMPARTILHADO"],
+        "AUDITORIO": ["AUDITORIO"],
+    }
+
+    selected_floor_key = _room_key(selected_floor)
+    selected_layout = floor_layouts.get(selected_floor_key)
+    used_room_ids: set[str] = set()
+    room_rows: List[List[Dict[str, Any]]] = []
+    map_columns = 0
+
+    if selected_layout:
+        map_columns = max(len(row) for row in selected_layout) if selected_layout else 1
+        for layout_row in selected_layout:
+            row_cards: List[Dict[str, Any]] = []
+            for slot in layout_row:
+                if slot is None:
+                    row_cards.append({"placeholder": True})
+                    continue
+                search_keys = [slot] + alias_map.get(slot, [])
+                room_data: Optional[Dict[str, Any]] = None
+                for candidate in search_keys:
+                    found = rooms_by_key.get(candidate)
+                    if found:
+                        room_data = found
+                        break
+                if room_data:
+                    used_room_ids.add(str(room_data.get("id") or ""))
+                    row_cards.append(room_data)
+                else:
+                    row_cards.append(
+                        {
+                            "id": "",
+                            "label": slot,
+                            "status": "free",
+                            "instructor": "—",
+                            "turma": "—",
+                            "course": "Livre",
+                            "virtual": True,
+                        }
+                    )
+            room_rows.append(row_cards)
+
+        extras = [item for item in map_rooms if str(item.get("id") or "") not in used_room_ids]
+        if extras:
+            if not map_columns:
+                map_columns = max(1, int(math.ceil(len(extras) / 2.0)))
+            for i in range(0, len(extras), map_columns):
+                row = extras[i : i + map_columns]
+                if len(row) < map_columns:
+                    row = row + [{"placeholder": True} for _ in range(map_columns - len(row))]
+                room_rows.append(row)
+    else:
+        map_columns = max(1, int(math.ceil(len(map_rooms) / 2.0))) if map_rooms else 1
+        room_rows = [
+            map_rooms[i : i + map_columns]
+            for i in range(0, len(map_rooms), map_columns)
+        ]
+        room_rows = [
+            row + [{"placeholder": True} for _ in range(map_columns - len(row))]
+            if len(row) < map_columns
+            else row
+            for row in room_rows
+        ]
+    active_total = occupied_count + available_count
+    occupancy_pct = (occupied_count / active_total * 100.0) if active_total > 0 else 0.0
+    return {
+        floor_options=floor_options,
+        shifts=shifts,
+        selected_floor=selected_floor,
+        selected_turno_id=selected_turno_id,
+        selected_turno_nome=(selected_shift.get("nome") if selected_shift else "—"),
+        map_rooms=map_rooms,
+        room_rows=room_rows,
+        map_columns=map_columns,
+        occupancy_pct=occupancy_pct,
+        occupied_count=occupied_count,
+        available_count=available_count,
+        inactive_count=inactive_count,
+    }
+
+
+@app.get("/")
+def dashboard(request: Request, pavimento: str = "", turno_id: str = ""):
+    context = _build_room_map_view(pavimento=pavimento, turno_id=turno_id)
+    return _render(request, "dashboard.html", **context)
+
+
+@app.get("/dashboard/report")
+def dashboard_report(request: Request, pavimento: str = "", turno_id: str = ""):
+    context = _build_room_map_view(pavimento=pavimento, turno_id=turno_id)
+    rows = []
+    for item in context["map_rooms"]:
+        status = str(item.get("status") or "free")
+        rows.append(
+            {
+                "ambiente": item.get("label") or "—",
+                "status": (
+                    "Ocupado"
+                    if status == "occupied"
+                    else ("Inativo" if status == "inactive" else "Livre")
+                ),
+                "instrutor": item.get("instructor") or "—",
+                "analista": item.get("analista") or "—",
+                "curso": item.get("course") or "—",
+                "turma": item.get("turma") or "—",
+                "turno": context.get("selected_turno_nome") or "—",
+                "periodo": item.get("periodo") or "—",
+            }
+        )
+    rows.sort(key=lambda row: str(row.get("ambiente") or ""))
     return _render(
         request,
-        "dashboard.html",
-        counts={
-            "courses": len(list_courses()),
-            "units": len(list_units()),
-            "instructors": len(list_instructors()),
-            "rooms": len(list_rooms()),
-            "shifts": len(list_shifts()),
-            "calendars": len(list_calendars()),
-            "schedules": len(list_schedules()),
-        },
+        "dashboard_report.html",
+        rows=rows,
+        selected_floor=context.get("selected_floor") or "—",
+        selected_turno_nome=context.get("selected_turno_nome") or "—",
+        occupancy_pct=context.get("occupancy_pct") or 0.0,
+        occupied_count=context.get("occupied_count") or 0,
+        available_count=context.get("available_count") or 0,
+        inactive_count=context.get("inactive_count") or 0,
+        total=len(rows),
     )
 
 
@@ -668,6 +939,49 @@ def rooms_list(request: Request):
     return _render(request, "rooms.html", rooms=list_rooms())
 
 
+@app.get("/rooms/report")
+def rooms_report(request: Request, organize: str = "alpha"):
+    rooms = list_rooms()
+    organize_mode = str(organize or "alpha").strip().lower()
+    if organize_mode not in {"floor", "alpha", "capacity"}:
+        organize_mode = "alpha"
+
+    if organize_mode == "floor":
+        rooms.sort(
+            key=lambda item: (
+                str(item.get("pavimento") or ""),
+                str(item.get("nome") or ""),
+            )
+        )
+    elif organize_mode == "capacity":
+        rooms.sort(
+            key=lambda item: (
+                _parse_int(str(item.get("capacidade") or "")) or 0,
+                str(item.get("nome") or ""),
+            )
+        )
+    else:
+        rooms.sort(key=lambda item: str(item.get("nome") or ""))
+
+    floor_totals: Dict[str, int] = {}
+    for room in rooms:
+        floor = str(room.get("pavimento") or "Não informado").strip() or "Não informado"
+        floor_totals[floor] = floor_totals.get(floor, 0) + 1
+    floor_totals_rows = [
+        {"pavimento": floor, "total": total}
+        for floor, total in sorted(floor_totals.items(), key=lambda item: item[0])
+    ]
+
+    return _render(
+        request,
+        "rooms_report.html",
+        rooms=rooms,
+        organize_mode=organize_mode,
+        floor_totals=floor_totals_rows,
+        total_rooms=len(rooms),
+    )
+
+
 @app.get("/rooms/new")
 def rooms_new(request: Request):
     return _render(
@@ -780,6 +1094,98 @@ def instructors_redirect():
     return RedirectResponse("/collaborators", status_code=302)
 
 
+def _canonical_weekday_token(raw: str) -> str:
+    token = str(raw or "").strip().upper().replace("Á", "A")
+    aliases = {
+        "SEG": "SEG",
+        "TER": "TER",
+        "QUA": "QUA",
+        "QUI": "QUI",
+        "SEX": "SEX",
+        "SAB": "SÁB",
+        "DOM": "DOM",
+    }
+    return aliases.get(token, "")
+
+
+def _weekday_index_from_token(raw: str) -> Optional[int]:
+    day = _canonical_weekday_token(raw)
+    mapping = {"SEG": 0, "TER": 1, "QUA": 2, "QUI": 3, "SEX": 4, "SÁB": 5, "DOM": 6}
+    return mapping.get(day)
+
+
+def _period_bounds(year_value: int, period_type: str, period_value: str) -> tuple[date, date]:
+    p_type, p_value = normalize_period(period_type, period_value)
+    if p_type == "month":
+        month = int(p_value)
+        last = calendar_module.monthrange(year_value, month)[1]
+        return date(year_value, month, 1), date(year_value, month, last)
+    if p_type == "quarter":
+        quarter = int(p_value)
+        start_month = ((quarter - 1) * 3) + 1
+        end_month = start_month + 2
+        return date(year_value, start_month, 1), date(
+            year_value,
+            end_month,
+            calendar_module.monthrange(year_value, end_month)[1],
+        )
+    if p_type == "semester":
+        semester = int(p_value)
+        start_month = 1 if semester == 1 else 7
+        end_month = 6 if semester == 1 else 12
+        return date(year_value, start_month, 1), date(
+            year_value,
+            end_month,
+            calendar_module.monthrange(year_value, end_month)[1],
+        )
+    return date(year_value, 1, 1), date(year_value, 12, 31)
+
+
+def _has_weekday_between(start_day: date, end_day: date, weekday_idx: int) -> bool:
+    if start_day > end_day:
+        return False
+    offset = (weekday_idx - start_day.weekday()) % 7
+    return (start_day + timedelta(days=offset)) <= end_day
+
+
+def _instructor_busy_slots_in_period(
+    instructor_id: str,
+    year_value: int,
+    period_type: str,
+    period_value: str,
+) -> set[str]:
+    target_start, target_end = _period_bounds(year_value, period_type, period_value)
+    busy: set[str] = set()
+    for item in list_schedules():
+        instructor_ids = {str(v).strip() for v in (item.get("instrutor_ids") or []) if str(v).strip()}
+        primary = str(item.get("instrutor_id") or "").strip()
+        if primary:
+            instructor_ids.add(primary)
+        if str(instructor_id).strip() not in instructor_ids:
+            continue
+        shift_id = str(item.get("turno_id") or "").strip()
+        if not shift_id:
+            continue
+        sch_start = _parse_br_date(str(item.get("data_inicio") or ""))
+        sch_end = _parse_br_date(str(item.get("data_fim") or ""))
+        if not sch_start or not sch_end:
+            continue
+        overlap_start = max(target_start, sch_start)
+        overlap_end = min(target_end, sch_end)
+        if overlap_start > overlap_end:
+            continue
+        for raw_day in (item.get("dias_execucao") or []):
+            day = _canonical_weekday_token(str(raw_day))
+            if day not in WEEKDAYS:
+                continue
+            weekday_idx = _weekday_index_from_token(day)
+            if weekday_idx is None:
+                continue
+            if _has_weekday_between(overlap_start, overlap_end, weekday_idx):
+                busy.add(f"{day}|{shift_id}")
+    return busy
+
+
 def _availability_instructors_context(
     request: Request,
     selected_instructor_id: str = "",
@@ -802,6 +1208,7 @@ def _availability_instructors_context(
 
     selected_record = None
     selected_slots: List[str] = []
+    occupied_slots: set[str] = set()
     notes = ""
     share_status = "nao_enviado"
     share_url = ""
@@ -825,6 +1232,12 @@ def _availability_instructors_context(
                 share_token = str(selected_record.get("share_token") or "").strip()
                 if share_token:
                     share_url = f"{str(request.base_url).rstrip('/')}/availability/instructors/shared/{share_token}"
+            occupied_slots = _instructor_busy_slots_in_period(
+                selected_instructor_id,
+                year_int,
+                selected_period_type,
+                selected_period_value,
+            )
         except ValidationError:
             pass
 
@@ -848,7 +1261,10 @@ def _availability_instructors_context(
             {"value": "year", "label": "Ano"},
         ],
         "selected_period_label": _availability_period_label(selected_period_type, selected_period_value),
-        "selected_slots": set(selected_slots),
+        "selected_slots": set(selected_slots).union(occupied_slots),
+        "occupied_slots": occupied_slots,
+        "manual_slots_count": len(set(selected_slots)),
+        "occupied_slots_count": len(occupied_slots),
         "notes": notes,
         "share_status": share_status,
         "share_url": share_url,
@@ -1018,9 +1434,536 @@ def availability_instructors_shared_save(
     return RedirectResponse(f"/availability/instructors/shared/{token}", status_code=303)
 
 
+def _parse_date_iso(value: str) -> Optional[date]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _parse_br_date(value: str) -> Optional[date]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
+def _parse_hhmm(value: str) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%H:%M")
+    except ValueError:
+        return None
+
+
+def _weekday_key(dt: date) -> str:
+    labels = {0: "SEG", 1: "TER", 2: "QUA", 3: "QUI", 4: "SEX", 5: "SAB", 6: "DOM"}
+    return labels.get(dt.weekday(), "")
+
+
+def _schedule_active_on_day(item: Dict[str, Any], target_day: date) -> bool:
+    start = _parse_br_date(str(item.get("data_inicio") or ""))
+    end = _parse_br_date(str(item.get("data_fim") or ""))
+    if not start or not end:
+        return False
+    if not (start <= target_day <= end):
+        return False
+    target_weekday = _weekday_key(target_day)
+    weekdays = {str(day or "").strip().upper().replace("Á", "A") for day in (item.get("dias_execucao") or [])}
+    return target_weekday in weekdays
+
+
+def _schedule_running_now(item: Dict[str, Any], now_dt: datetime) -> bool:
+    if not _schedule_active_on_day(item, now_dt.date()):
+        return False
+    start_dt = _parse_hhmm(str(item.get("hora_inicio") or ""))
+    end_dt = _parse_hhmm(str(item.get("hora_fim") or ""))
+    if not start_dt or not end_dt:
+        return False
+    now_minutes = now_dt.hour * 60 + now_dt.minute
+    start_minutes = start_dt.hour * 60 + start_dt.minute
+    end_minutes = end_dt.hour * 60 + end_dt.minute
+    return start_minutes <= now_minutes < end_minutes
+
+
+def _schedule_has_execution_between(item: Dict[str, Any], start_day: date, end_day: date) -> bool:
+    sch_start = _parse_br_date(str(item.get("data_inicio") or ""))
+    sch_end = _parse_br_date(str(item.get("data_fim") or ""))
+    if not sch_start or not sch_end:
+        return False
+    overlap_start = max(start_day, sch_start)
+    overlap_end = min(end_day, sch_end)
+    if overlap_start > overlap_end:
+        return False
+    for raw_day in (item.get("dias_execucao") or []):
+        day = _canonical_weekday_token(str(raw_day))
+        idx = _weekday_index_from_token(day)
+        if idx is None:
+            continue
+        if _has_weekday_between(overlap_start, overlap_end, idx):
+            return True
+    return False
+
+
+def _schedule_range_bounds(items: List[Dict[str, Any]]) -> Optional[tuple[date, date]]:
+    starts: List[date] = []
+    ends: List[date] = []
+    for item in items:
+        start = _parse_br_date(str(item.get("data_inicio") or ""))
+        end = _parse_br_date(str(item.get("data_fim") or ""))
+        if not start or not end:
+            continue
+        starts.append(start)
+        ends.append(end)
+    if not starts or not ends:
+        return None
+    return min(starts), max(ends)
+
+
+def _resolve_report_dates(
+    date_from: str,
+    date_to: str,
+    schedules: List[Dict[str, Any]],
+) -> tuple[date, date]:
+    parsed_from = _parse_date_iso(date_from)
+    parsed_to = _parse_date_iso(date_to)
+    if parsed_from and parsed_to:
+        return (parsed_to, parsed_from) if parsed_from > parsed_to else (parsed_from, parsed_to)
+    bounds = _schedule_range_bounds(schedules)
+    if bounds:
+        return bounds
+    today = date.today()
+    return today, today
+
+
+def _room_report_rows(
+    rooms: List[Dict[str, Any]],
+    schedules: List[Dict[str, Any]],
+    shifts: List[Dict[str, Any]],
+    start_day: date,
+    end_day: date,
+    selected_shift_id: str,
+    selected_status: str,
+) -> List[Dict[str, Any]]:
+    shift_map = {str(item.get("id") or ""): item for item in shifts}
+    rows: List[Dict[str, Any]] = []
+    for room in rooms:
+        room_id = str(room.get("id") or "")
+        matches: List[Dict[str, Any]] = []
+        for item in schedules:
+            if str(item.get("sala_id") or "") != room_id:
+                continue
+            if selected_shift_id and str(item.get("turno_id") or "") != selected_shift_id:
+                continue
+            if not _schedule_has_execution_between(item, start_day, end_day):
+                continue
+            matches.append(item)
+        is_occupied = len(matches) > 0
+        status = "occupied" if is_occupied else "free"
+        if selected_status in {"free", "occupied"} and status != selected_status:
+            continue
+        first = matches[0] if matches else {}
+        first_shift = shift_map.get(str(first.get("turno_id") or "")) if first else None
+        rows.append(
+            {
+                "room_id": room_id,
+                "nome": room.get("nome") or room_id,
+                "pavimento": room.get("pavimento") or "—",
+                "capacidade": room.get("capacidade") or "—",
+                "status": status,
+                "agendamentos": len(matches),
+                "turno": (first_shift.get("nome") if first_shift else "—") if matches else "—",
+                "periodo": (
+                    f"{first.get('data_inicio', '—')} a {first.get('data_fim', '—')}" if matches else "—"
+                ),
+                "turma": first.get("turma") or "—",
+            }
+        )
+    rows.sort(key=lambda row: (0 if row["status"] == "occupied" else 1, str(row["nome"])))
+    return rows
+
+
+def _instructor_report_rows(
+    instructors: List[Dict[str, Any]],
+    schedules: List[Dict[str, Any]],
+    shifts: List[Dict[str, Any]],
+    rooms: List[Dict[str, Any]],
+    start_day: date,
+    end_day: date,
+    selected_shift_id: str,
+    selected_status: str,
+) -> List[Dict[str, Any]]:
+    shift_map = {str(item.get("id") or ""): item for item in shifts}
+    room_map = {str(item.get("id") or ""): item for item in rooms}
+    rows: List[Dict[str, Any]] = []
+    for instructor in instructors:
+        instructor_id = str(instructor.get("id") or "")
+        matches: List[Dict[str, Any]] = []
+        for item in schedules:
+            item_instructors = {str(v).strip() for v in (item.get("instrutor_ids") or []) if str(v).strip()}
+            primary = str(item.get("instrutor_id") or "").strip()
+            if primary:
+                item_instructors.add(primary)
+            if instructor_id not in item_instructors:
+                continue
+            if selected_shift_id and str(item.get("turno_id") or "") != selected_shift_id:
+                continue
+            if not _schedule_has_execution_between(item, start_day, end_day):
+                continue
+            matches.append(item)
+        is_occupied = len(matches) > 0
+        status = "occupied" if is_occupied else "free"
+        if selected_status in {"free", "occupied"} and status != selected_status:
+            continue
+        first = matches[0] if matches else {}
+        first_shift = shift_map.get(str(first.get("turno_id") or "")) if first else None
+        first_room = room_map.get(str(first.get("sala_id") or "")) if first else None
+        rows.append(
+            {
+                "instructor_id": instructor_id,
+                "nome": instructor.get("nome_sobrenome") or instructor.get("nome") or instructor_id,
+                "status": status,
+                "agendamentos": len(matches),
+                "turno": (first_shift.get("nome") if first_shift else "—") if matches else "—",
+                "periodo": (
+                    f"{first.get('data_inicio', '—')} a {first.get('data_fim', '—')}" if matches else "—"
+                ),
+                "turma": first.get("turma") or "—",
+                "ambiente": (first_room.get("nome") if first_room else "—") if matches else "—",
+            }
+        )
+    rows.sort(key=lambda row: (0 if row["status"] == "occupied" else 1, str(row["nome"])))
+    return rows
+
+
+def _xlsx_col_name(index_1_based: int) -> str:
+    if index_1_based <= 0:
+        return "A"
+    name = ""
+    n = index_1_based
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        name = chr(65 + rem) + name
+    return name
+
+
+def _xml_escape(value: Any) -> str:
+    text = str(value if value is not None else "")
+    text = (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+    # remove control characters invalid in XML 1.0 (except tab/newline/carriage return)
+    text = "".join(ch for ch in text if ch in "\t\n\r" or ord(ch) >= 32)
+    return text
+
+
+def _build_xlsx_bytes(sheet_name: str, headers: List[str], rows: List[List[Any]]) -> bytes:
+    safe_sheet = _xml_escape(sheet_name)[:31] or "Relatorio"
+
+    sheet_rows: List[str] = []
+    all_rows = [headers] + rows
+    for r_idx, row_values in enumerate(all_rows, start=1):
+        cells: List[str] = []
+        for c_idx, value in enumerate(row_values, start=1):
+            cell_ref = f"{_xlsx_col_name(c_idx)}{r_idx}"
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                cells.append(f'<c r="{cell_ref}"><v>{value}</v></c>')
+            else:
+                escaped = _xml_escape(value)
+                cells.append(
+                    f'<c r="{cell_ref}" t="inlineStr"><is><t xml:space="preserve">{escaped}</t></is></c>'
+                )
+        sheet_rows.append(f'<row r="{r_idx}">{"".join(cells)}</row>')
+    sheet_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        "<sheetData>"
+        + "".join(sheet_rows)
+        + "</sheetData></worksheet>"
+    )
+
+    content_types_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>"""
+    rels_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"""
+    workbook_xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="{safe_sheet}" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>"""
+    workbook_rels_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>"""
+    styles_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border/></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+</styleSheet>"""
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", content_types_xml)
+        zf.writestr("_rels/.rels", rels_xml)
+        zf.writestr("xl/workbook.xml", workbook_xml)
+        zf.writestr("xl/_rels/workbook.xml.rels", workbook_rels_xml)
+        zf.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+        zf.writestr("xl/styles.xml", styles_xml)
+    return output.getvalue()
+
+
 @app.get("/availability/rooms")
-def availability_rooms(request: Request):
-    return _render(request, "availability_rooms.html")
+def availability_rooms(request: Request, view: str = "current"):
+    mode = str(view or "current").strip().lower()
+    if mode not in {"current", "free"}:
+        mode = "current"
+
+    rooms = [item for item in list_rooms() if item.get("ativo", True)]
+    schedules = list_schedules()
+    courses_map = {str(item.get("id") or ""): item for item in list_courses()}
+    shifts_map = {str(item.get("id") or ""): item for item in list_shifts()}
+    instructors_map = {str(item.get("id") or ""): item for item in list_instructors()}
+
+    occupied_now: List[Dict[str, Any]] = []
+    for item in schedules:
+        room_id = str(item.get("sala_id") or "")
+        if not room_id:
+            continue
+        room = next((r for r in rooms if str(r.get("id") or "") == room_id), None)
+        if not room:
+            continue
+        course = courses_map.get(str(item.get("curso_id") or ""))
+        shift = shifts_map.get(str(item.get("turno_id") or ""))
+        instructor_ids = [str(v).strip() for v in (item.get("instrutor_ids") or []) if str(v).strip()]
+        primary_id = str(item.get("instrutor_id") or "").strip()
+        if primary_id and primary_id not in instructor_ids:
+            instructor_ids.insert(0, primary_id)
+        instructor_names = []
+        for instructor_id in instructor_ids:
+            instructor = instructors_map.get(instructor_id)
+            if not instructor:
+                continue
+            display = instructor.get("nome_sobrenome") or instructor.get("nome") or instructor_id
+            if display not in instructor_names:
+                instructor_names.append(display)
+        occupied_now.append(
+            {
+                "room_id": room_id,
+                "ambiente": room.get("nome") or room_id,
+                "pavimento": room.get("pavimento") or "—",
+                "capacidade": room.get("capacidade") or "—",
+                "curso": (course.get("nome") if course else "—"),
+                "turma": item.get("turma") or "—",
+                "instrutor": ", ".join(instructor_names) if instructor_names else "—",
+                "turno": (shift.get("nome") if shift else "—"),
+                "horario": f"{item.get('hora_inicio') or '—'} - {item.get('hora_fim') or '—'}",
+                "periodo": f"{item.get('data_inicio') or '—'} a {item.get('data_fim') or '—'}",
+            }
+        )
+    occupied_room_ids = {str(row.get("room_id") or "") for row in occupied_now}
+
+    free_now = [
+        {
+            "room_id": str(room.get("id") or ""),
+            "ambiente": room.get("nome") or str(room.get("id") or ""),
+            "pavimento": room.get("pavimento") or "—",
+            "capacidade": room.get("capacidade") or "—",
+        }
+        for room in rooms
+        if str(room.get("id") or "") not in occupied_room_ids
+    ]
+    occupied_now.sort(key=lambda row: (str(row["ambiente"]), str(row["periodo"])))
+    free_now.sort(key=lambda row: str(row["ambiente"]))
+
+    return _render(
+        request,
+        "availability_rooms.html",
+        selected_view=mode,
+        now_label="Baseado na programação cadastrada",
+        occupied_now=occupied_now,
+        free_now=free_now,
+        total_rooms=len(rooms),
+        total_occupied=len(occupied_room_ids),
+        total_free=len(free_now),
+    )
+
+
+@app.get("/availability/rooms/report")
+def availability_rooms_report(
+    request: Request,
+    date_from: str = "",
+    date_to: str = "",
+    shift_id: str = "",
+    status: str = "all",
+):
+    selected_status = str(status or "all").strip().lower()
+    if selected_status not in {"all", "free", "occupied"}:
+        selected_status = "all"
+
+    rooms = [item for item in list_rooms() if item.get("ativo", True)]
+    schedules = list_schedules()
+    selected_from, selected_to = _resolve_report_dates(date_from, date_to, schedules)
+    shifts = [item for item in list_shifts() if item.get("ativo", True)]
+    rows = _room_report_rows(
+        rooms=rooms,
+        schedules=schedules,
+        shifts=shifts,
+        start_day=selected_from,
+        end_day=selected_to,
+        selected_shift_id=str(shift_id or "").strip(),
+        selected_status=selected_status,
+    )
+
+    total = len(rows)
+    occupied_count = sum(1 for row in rows if row["status"] == "occupied")
+    free_count = sum(1 for row in rows if row["status"] == "free")
+    return _render(
+        request,
+        "availability_rooms_report.html",
+        rows=rows,
+        shifts=shifts,
+        selected_shift_id=str(shift_id or "").strip(),
+        selected_status=selected_status,
+        selected_from=selected_from.isoformat(),
+        selected_to=selected_to.isoformat(),
+        total=total,
+        occupied_count=occupied_count,
+        free_count=free_count,
+    )
+
+
+@app.get("/availability/rooms/report.xlsx")
+def availability_rooms_report_xlsx(
+    date_from: str = "",
+    date_to: str = "",
+    shift_id: str = "",
+    status: str = "all",
+):
+    selected_status = str(status or "all").strip().lower()
+    if selected_status not in {"all", "free", "occupied"}:
+        selected_status = "all"
+
+    rooms = [item for item in list_rooms() if item.get("ativo", True)]
+    schedules = list_schedules()
+    selected_from, selected_to = _resolve_report_dates(date_from, date_to, schedules)
+    shifts = [item for item in list_shifts() if item.get("ativo", True)]
+    rows = _room_report_rows(
+        rooms=rooms,
+        schedules=schedules,
+        shifts=shifts,
+        start_day=selected_from,
+        end_day=selected_to,
+        selected_shift_id=str(shift_id or "").strip(),
+        selected_status=selected_status,
+    )
+
+    xlsx_headers = [
+        "Ambiente",
+        "Pavimento",
+        "Capacidade",
+        "Status",
+        "Qtd. Agendamentos",
+        "Turno (1o)",
+        "Periodo (1o)",
+        "Turma (1o)",
+    ]
+    xlsx_rows: List[List[Any]] = []
+    for item in rows:
+        xlsx_rows.append(
+            [
+                item.get("nome") or "",
+                item.get("pavimento") or "",
+                item.get("capacidade") or "",
+                "Ocupado" if item.get("status") == "occupied" else "Livre",
+                int(item.get("agendamentos") or 0),
+                item.get("turno") or "",
+                item.get("periodo") or "",
+                item.get("turma") or "",
+            ]
+        )
+    xlsx_data = _build_xlsx_bytes("Relatorio Ambientes", xlsx_headers, xlsx_rows)
+    filename = f"relatorio_ambientes_{selected_from.isoformat()}_{selected_to.isoformat()}.xlsx"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return Response(
+        content=xlsx_data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+@app.get("/availability/instructors/report")
+def availability_instructors_report(
+    request: Request,
+    date_from: str = "",
+    date_to: str = "",
+    shift_id: str = "",
+    status: str = "all",
+):
+    selected_status = str(status or "all").strip().lower()
+    if selected_status not in {"all", "free", "occupied"}:
+        selected_status = "all"
+
+    schedules = list_schedules()
+    selected_from, selected_to = _resolve_report_dates(date_from, date_to, schedules)
+    shifts = [item for item in list_shifts() if item.get("ativo", True)]
+    rooms = [item for item in list_rooms() if item.get("ativo", True)]
+    instructors = [
+        item for item in list_instructors() if item.get("role") == "Instrutor" and item.get("ativo", True)
+    ]
+    instructors.sort(key=lambda item: (item.get("nome_sobrenome") or item.get("nome") or ""))
+
+    rows = _instructor_report_rows(
+        instructors=instructors,
+        schedules=schedules,
+        shifts=shifts,
+        rooms=rooms,
+        start_day=selected_from,
+        end_day=selected_to,
+        selected_shift_id=str(shift_id or "").strip(),
+        selected_status=selected_status,
+    )
+    total = len(rows)
+    occupied_count = sum(1 for row in rows if row["status"] == "occupied")
+    free_count = sum(1 for row in rows if row["status"] == "free")
+    return _render(
+        request,
+        "availability_instructors_report.html",
+        rows=rows,
+        shifts=shifts,
+        selected_shift_id=str(shift_id or "").strip(),
+        selected_status=selected_status,
+        selected_from=selected_from.isoformat(),
+        selected_to=selected_to.isoformat(),
+        total=total,
+        occupied_count=occupied_count,
+        free_count=free_count,
+    )
 
 
 @app.get("/collaborators/new")
@@ -2724,6 +3667,21 @@ def _build_day_map_from_slot_map(
     return day_map
 
 
+def _slot_counts_match_expected(
+    slot_uc_map: Dict[str, str],
+    expected_counts: Dict[str, int],
+) -> bool:
+    actual: Dict[str, int] = {label: 0 for label in expected_counts}
+    for raw in slot_uc_map.values():
+        label = str(raw or "").strip().upper()
+        if label in actual:
+            actual[label] += 1
+    for label, expected in expected_counts.items():
+        if actual.get(label, 0) != expected:
+            return False
+    return True
+
+
 def _build_auto_slot_uc_map(
     exec_dates: List[date],
     slots_per_day: int,
@@ -2805,10 +3763,15 @@ def _build_auto_slot_uc_map(
     if current_day:
         packed_days.append(current_day)
 
-    for day_idx, day in enumerate(exec_dates):
-        values = packed_days[day_idx] if day_idx < len(packed_days) else []
+    flat_values: List[str] = []
+    for values in packed_days:
+        flat_values.extend(values)
+
+    cursor = 0
+    for day in exec_dates:
         for slot_idx in range(slots_per_day):
-            slot_map[_slot_key(day, slot_idx)] = values[slot_idx] if slot_idx < len(values) else ""
+            slot_map[_slot_key(day, slot_idx)] = flat_values[cursor] if cursor < len(flat_values) else ""
+            cursor += 1
 
     return slot_map
 
@@ -2867,6 +3830,7 @@ def _build_chronogram_data(
     uc_catalog = _build_uc_catalog(units)
     uc_color_map = _build_uc_color_map(uc_catalog)
     allowed_labels = {item["label"] for item in uc_catalog}
+    expected_counts = _expected_uc_slot_counts(uc_catalog)
 
     auto_slot_uc_map = _build_auto_slot_uc_map(exec_dates, slots_per_day, uc_catalog)
     auto_day_uc_map = _build_day_map_from_slot_map(exec_dates, slots_per_day, auto_slot_uc_map)
@@ -2890,7 +3854,8 @@ def _build_chronogram_data(
             schedule.get("chronogram_slot_uc_map") or {},
             allowed_labels,
         )
-    slot_uc_map = saved_slot_uc_map if saved_slot_uc_map else auto_slot_uc_map
+    can_use_saved = bool(saved_slot_uc_map) and _slot_counts_match_expected(saved_slot_uc_map, expected_counts)
+    slot_uc_map = saved_slot_uc_map if can_use_saved else auto_slot_uc_map
     if not slot_uc_map:
         slot_uc_map = auto_slot_uc_map
     if slots_per_day > 0:
@@ -3121,7 +4086,7 @@ def _save_chronogram_distribution(
         "chronogram_status": "alterado_instrutor" if mark_instrutor else "alterado_interno",
     }
     try:
-        update_schedule(schedule_id, updates)
+        update_schedule(schedule_id, updates, validate_schedule=False)
         return True, "Cronograma atualizado com sucesso."
     except ValidationError as exc:
         return False, str(exc)
@@ -3159,7 +4124,7 @@ def _apply_chronogram_operation(
             "chronogram_status": updated_status,
         }
         try:
-            update_schedule(schedule_id, updates)
+            update_schedule(schedule_id, updates, validate_schedule=False)
             return True, "UCs zeradas com sucesso."
         except ValidationError as exc:
             return False, str(exc)
@@ -3174,7 +4139,7 @@ def _apply_chronogram_operation(
             "chronogram_status": updated_status,
         }
         try:
-            update_schedule(schedule_id, updates)
+            update_schedule(schedule_id, updates, validate_schedule=False)
             return True, "Distribuição padrão restaurada."
         except ValidationError as exc:
             return False, str(exc)
@@ -3265,6 +4230,7 @@ def chronogram_share_link(request: Request, schedule_id: str):
                 "chronogram_share_token": token,
                 "chronogram_share_created_at": datetime.now().isoformat(timespec="seconds"),
             },
+            validate_schedule=False,
         )
     except ValidationError as exc:
         _flash(request, str(exc), "error")

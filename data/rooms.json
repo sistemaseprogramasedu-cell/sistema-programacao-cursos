@@ -3,21 +3,192 @@
   "items": [
     {
       "id": "1",
-      "nome": "Laboratório de Tecnologia 01",
-      "capacidade": 25,
+      "nome": "LABORATÓRIO DE GAMES",
+      "abreviacao": "LAB GAMES",
+      "capacidade": 30,
       "pavimento": "Térreo",
       "recursos": [],
-      "ativo": true,
-      "abreviacao": "Lab Tec 01"
+      "ativo": true
     },
     {
       "id": "2",
-      "nome": "Estúdio de Fotografia",
+      "nome": "LABORATÓRIO DE TECNOLOGIA 01",
+      "abreviacao": "LAB TEC 1",
+      "capacidade": 25,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "3",
+      "nome": "LABORATÓRIO DE TECNOLOGIA 02",
+      "abreviacao": "LAB TEC 2",
+      "capacidade": 25,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "4",
+      "nome": "LABORATÓRIO DE TECNOLOGIA 03",
+      "abreviacao": "LAB TEC 3",
+      "capacidade": 25,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "5",
+      "nome": "LABORATÓRIO MAC",
+      "abreviacao": "LAB MAC",
+      "capacidade": 10,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "6",
+      "nome": "LABORATÓRIO DE REDES",
+      "abreviacao": "LAB REDES",
+      "capacidade": 20,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "7",
+      "nome": "ESTÚDIO DE ÁUDIO",
+      "abreviacao": "EST ÁUDIO",
+      "capacidade": 15,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "8",
+      "nome": "AMBIENTE DE CONHECIMENTO 04",
+      "abreviacao": "CONHEC 4",
+      "capacidade": 20,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "9",
+      "nome": "AMBIENTE DE CONHECIMENTO 03",
+      "abreviacao": "CONHEC 3",
+      "capacidade": 20,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "10",
+      "nome": "AMBIENTE DE CONHECIMENTO 02",
+      "abreviacao": "CONHEC 2",
+      "capacidade": 20,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "11",
+      "nome": "AMBIENTE DE CONHECIMENTO 01",
+      "abreviacao": "CONHEC 01",
+      "capacidade": 20,
+      "pavimento": "Térreo",
+      "recursos": [],
+      "ativo": false
+    },
+    {
+      "id": "12",
+      "nome": "AMBIENTE DE CONHECIMENTO 05",
+      "abreviacao": "CONHEC 5",
       "capacidade": 20,
       "pavimento": "1º Piso",
       "recursos": [],
-      "ativo": true,
-      "abreviacao": "Est. Foto"
+      "ativo": true
+    },
+    {
+      "id": "13",
+      "nome": "LABORATÓRIO DE TECNOLOGIA 04",
+      "abreviacao": "LAB TEC 4",
+      "capacidade": 20,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "14",
+      "nome": "LABORATÓRIO DE TECNOLOGIA 05",
+      "abreviacao": "LAB TEC 5",
+      "capacidade": 20,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "15",
+      "nome": "LABORATÓRIO DE EDIÇÃO",
+      "abreviacao": "LAB EDIÇÃO",
+      "capacidade": 14,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "16",
+      "nome": "LABORATÓRIO DE HARDWARE",
+      "abreviacao": "LAB HARDWARE",
+      "capacidade": 20,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "17",
+      "nome": "ESTÚDIO FOTOGRÁFICO",
+      "abreviacao": "EST FOTO",
+      "capacidade": 15,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "18",
+      "nome": "LABORATÓRIO DE MODA",
+      "abreviacao": "LAB MODA",
+      "capacidade": 16,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "19",
+      "nome": "LABORATÓRIO MULTI ÓPTICA E SURFAÇAGEM",
+      "abreviacao": "LAB ÓPTICA",
+      "capacidade": 20,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true
+    },
+    {
+      "id": "20",
+      "nome": "AMBIENTE COMPARTILHADO",
+      "abreviacao": "COMPART",
+      "capacidade": 20,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": false
+    },
+    {
+      "id": "21",
+      "nome": "AUDITÓRIO",
+      "abreviacao": "AUDITÓRIO",
+      "capacidade": 70,
+      "pavimento": "1º Piso",
+      "recursos": [],
+      "ativo": true
     }
   ],
   "notes": "Ambientes cadastrados no sistema."

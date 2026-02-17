@@ -55,7 +55,7 @@
       </div>
     {% endif %}
 
-    <p class="editor-hint">Linha UC DIA: use o raio para trocar as UCs de um dia inteiro com outro. Nas cÃ©lulas de horÃ¡rio, vocÃª pode trocar UCs individualmente.</p>
+    <p class="editor-hint">Linha UC DIA: arraste o raio para trocar as UCs de um dia inteiro com outro. Nas cÃ©lulas de horÃ¡rio, arraste UCs individualmente.</p>
 
     <form method="post" action="{{ '/chronograms/shared/' ~ shared_token ~ '/save' if shared_mode else '/chronograms/' ~ schedule.id ~ '/edit' }}" id="chronoForm">
       <input type="hidden" name="slot_sequence" id="slotSequenceInput" />
@@ -213,9 +213,10 @@
   const piLabels = new Set({{ pi_labels|tojson }});
   const ucColorMap = {{ uc_color_map|tojson }};
 
-  let dragData = null;
-  let dragMode = null; // "chip" | "day" | null
-  let dayDragSource = null;
+  let pointerMode = null; // "chip" | "day" | null
+  let chipSource = null;
+  let daySource = '';
+  let pointerIsDown = false;
 
   function clearUiSelections() {
     document.querySelectorAll('.drag-chip.active-source, .day-swap-handle.active-source').forEach(function (item) {
@@ -224,6 +225,13 @@
     document.querySelectorAll('.editor-cell.drop-over, .day-swap-cell.drop-over').forEach(function (item) {
       item.classList.remove('drop-over');
     });
+  }
+
+  function resetPointerState() {
+    pointerMode = null;
+    chipSource = null;
+    daySource = '';
+    pointerIsDown = false;
   }
 
   function setChipValue(chip, value) {
@@ -277,97 +285,57 @@
     instructorInput.value = JSON.stringify(instrValues);
   }
 
-  function applyToCell(cell, sourceData) {
-    if (!sourceData || sourceData.type !== cell.dataset.type) {
+  function swapChipValues(sourceChip, targetCell) {
+    if (!sourceChip || !targetCell) {
       return false;
     }
-    const targetChip = cell.querySelector('.drag-chip');
+    const sourceCell = sourceChip.closest('.editor-cell');
+    if (!sourceCell) {
+      return false;
+    }
+    if ((sourceCell.dataset.type || '') !== (targetCell.dataset.type || '')) {
+      return false;
+    }
+    const targetChip = targetCell.querySelector('.drag-chip');
     if (!targetChip) {
       return false;
     }
-
-    if (sourceData.isPalette) {
-      if (cell.dataset.type !== 'instr') {
-        return false;
-      }
-      setChipValue(targetChip, sourceData.value);
-      return true;
-    } else if (sourceData.source && sourceData.source !== targetChip) {
-      const targetValue = targetChip.dataset.value || '';
-      setChipValue(targetChip, sourceData.source.dataset.value || '');
-      setChipValue(sourceData.source, targetValue);
-      return true;
+    if (sourceChip === targetChip) {
+      return false;
     }
-    return false;
-  }
-
-  function sourceDataFromEvent(event, targetType, requireMode) {
-    if (requireMode && dragMode !== requireMode) {
-      return null;
-    }
-    if (dragData && dragData.type === targetType && dragMode === 'chip') {
-      return dragData;
-    }
-    const raw = event.dataTransfer ? (event.dataTransfer.getData('text/plain') || '') : '';
-    if (!raw || raw.indexOf('|') <= 0) {
-      return null;
-    }
-    const parts = raw.split('|');
-    if (parts.length < 2) {
-      return null;
-    }
-    const srcType = (parts[0] || '').trim();
-    const srcValue = (parts.slice(1).join('|') || '').trim().toUpperCase();
-    if (srcType !== targetType) {
-      return null;
-    }
-    return {
-      type: srcType,
-      value: srcValue,
-      source: null,
-      isPalette: (srcType === 'instr'),
-    };
+    const sourceValue = sourceChip.dataset.value || '';
+    const targetValue = targetChip.dataset.value || '';
+    setChipValue(targetChip, sourceValue);
+    setChipValue(sourceChip, targetValue);
+    return true;
   }
 
   function bindTargetCell(cell) {
-    const targetType = cell.dataset.type;
-    const canReceiveChip = function (event) {
-      return !!sourceDataFromEvent(event, targetType, 'chip');
-    };
-
-    cell.addEventListener('dragenter', function (event) {
-      if (!canReceiveChip(event)) {
+    const targetType = cell.dataset.type || '';
+    cell.addEventListener('pointerenter', function () {
+      if (!pointerIsDown || pointerMode !== 'chip' || !chipSource) {
         return;
       }
-      event.preventDefault();
+      const sourceCell = chipSource.closest('.editor-cell');
+      const sourceType = sourceCell ? (sourceCell.dataset.type || '') : '';
+      if (sourceType !== targetType) {
+        return;
+      }
       cell.classList.add('drop-over');
     });
-
-    cell.addEventListener('dragover', function (event) {
-      if (!canReceiveChip(event)) {
-        return;
-      }
-      event.preventDefault();
-      cell.classList.add('drop-over');
-    });
-
-    cell.addEventListener('dragleave', function () {
+    cell.addEventListener('pointerleave', function () {
       cell.classList.remove('drop-over');
     });
-
-    cell.addEventListener('drop', function (event) {
-      const sourceData = sourceDataFromEvent(event, targetType, 'chip');
-      if (!sourceData) {
+    cell.addEventListener('pointerup', function () {
+      if (!pointerIsDown || pointerMode !== 'chip' || !chipSource) {
         return;
       }
-      event.preventDefault();
-      event.stopPropagation();
-      cell.classList.remove('drop-over');
-      const changed = applyToCell(cell, sourceData);
+      const changed = swapChipValues(chipSource, cell);
       if (changed) {
         syncPayload();
-        clearUiSelections();
       }
+      clearUiSelections();
+      resetPointerState();
     });
   }
 
@@ -424,11 +392,10 @@
   }
 
   function bindDayDropTarget(targetNode) {
-    const onDragEnter = function (event) {
-      if (dragMode !== 'day') {
+    const onPointerEnter = function () {
+      if (!pointerIsDown || pointerMode !== 'day' || !daySource) {
         return;
       }
-      event.preventDefault();
       const cell = targetNode.classList.contains('day-swap-cell')
         ? targetNode
         : targetNode.closest('.day-swap-cell');
@@ -437,20 +404,7 @@
       }
     };
 
-    const onDragOver = function (event) {
-      if (dragMode !== 'day') {
-        return;
-      }
-      event.preventDefault();
-      const cell = targetNode.classList.contains('day-swap-cell')
-        ? targetNode
-        : targetNode.closest('.day-swap-cell');
-      if (cell) {
-        cell.classList.add('drop-over');
-      }
-    };
-
-    const onDragLeave = function () {
+    const onPointerLeave = function () {
       const cell = targetNode.classList.contains('day-swap-cell')
         ? targetNode
         : targetNode.closest('.day-swap-cell');
@@ -459,68 +413,49 @@
       }
     };
 
-    const onDrop = function (event) {
-      if (dragMode !== 'day') {
+    const onPointerUp = function () {
+      if (!pointerIsDown || pointerMode !== 'day' || !daySource) {
         return;
       }
-      event.preventDefault();
-      event.stopPropagation();
-      const raw = event.dataTransfer ? (event.dataTransfer.getData('text/day') || '') : '';
-      const sourceDate = raw || dayDragSource;
       const targetDate = extractDateTarget(targetNode);
-      swapWholeDay(sourceDate, targetDate);
+      swapWholeDay(daySource, targetDate);
+      clearUiSelections();
+      resetPointerState();
     };
 
-    targetNode.addEventListener('dragenter', onDragEnter);
-    targetNode.addEventListener('dragover', onDragOver);
-    targetNode.addEventListener('dragleave', onDragLeave);
-    targetNode.addEventListener('drop', onDrop);
+    targetNode.addEventListener('pointerenter', onPointerEnter);
+    targetNode.addEventListener('pointerleave', onPointerLeave);
+    targetNode.addEventListener('pointerup', onPointerUp);
   }
 
   function bindDayHandle(handle) {
     const targetDate = handle.dataset.date || '';
-
-    handle.addEventListener('dragstart', function (event) {
-      dragMode = 'day';
-      dayDragSource = targetDate;
+    handle.setAttribute('draggable', 'false');
+    handle.addEventListener('pointerdown', function () {
+      pointerMode = 'day';
+      daySource = targetDate;
+      pointerIsDown = true;
+      chipSource = null;
       daySwapHandles.forEach(function (item) { item.classList.remove('active-source'); });
       handle.classList.add('active-source');
-      if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/day', targetDate);
-      }
-    });
-
-    handle.addEventListener('dragend', function () {
-      dragMode = null;
-      dayDragSource = null;
       clearUiSelections();
+      handle.classList.add('active-source');
     });
   }
 
-  function bindChipSource(chip, isPalette) {
-    chip.addEventListener('dragstart', function (event) {
-      dragMode = 'chip';
-      dragData = {
-        type: chip.dataset.type,
-        value: chip.dataset.value || '',
-        source: isPalette ? null : chip,
-        isPalette: !!isPalette,
-      };
-      if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = isPalette ? 'copyMove' : 'move';
-        event.dataTransfer.setData('text/plain', (chip.dataset.type || '') + '|' + (chip.dataset.value || ''));
-      }
+  function bindChipSource(chip) {
+    chip.setAttribute('draggable', 'false');
+    chip.addEventListener('pointerdown', function () {
+      pointerMode = 'chip';
+      chipSource = chip;
+      pointerIsDown = true;
+      daySource = '';
+      clearUiSelections();
       chip.classList.add('active-source');
     });
-    chip.addEventListener('dragend', function () {
-      dragMode = null;
-      dragData = null;
-      clearUiSelections();
-    });
   }
 
-  editableChips.forEach(function (chip) { bindChipSource(chip, false); });
+  editableChips.forEach(function (chip) { bindChipSource(chip); });
 
   daySwapHandles.forEach(function (handle) {
     bindDayHandle(handle);
@@ -530,50 +465,9 @@
     bindTargetCell(cell);
   });
 
-  editableChips.forEach(function (chip) {
-    chip.addEventListener('dragenter', function (event) {
-      const cell = chip.closest('.editor-cell');
-      if (!cell) {
-        return;
-      }
-      const sourceData = sourceDataFromEvent(event, cell.dataset.type, 'chip');
-      if (!sourceData) {
-        return;
-      }
-      event.preventDefault();
-      cell.classList.add('drop-over');
-    });
-    chip.addEventListener('dragover', function (event) {
-      const cell = chip.closest('.editor-cell');
-      if (!cell) {
-        return;
-      }
-      const sourceData = sourceDataFromEvent(event, cell.dataset.type, 'chip');
-      if (!sourceData) {
-        return;
-      }
-      event.preventDefault();
-      cell.classList.add('drop-over');
-    });
-    chip.addEventListener('drop', function (event) {
-      event.preventDefault();
-      event.stopPropagation();
-      const cell = chip.closest('.editor-cell');
-      const sourceData = cell ? sourceDataFromEvent(event, cell.dataset.type, 'chip') : null;
-      if (!cell || !sourceData) {
-        return;
-      }
-      const changed = applyToCell(cell, sourceData);
-      if (changed) {
-        syncPayload();
-        clearUiSelections();
-      }
-    });
-  });
-
   // Dia inteiro (raio) pode soltar em qualquer parte da coluna do dia.
   daySwapCells.forEach(function (cell) { bindDayDropTarget(cell); });
-  editableCells.forEach(function (cell) { bindDayDropTarget(cell); });
+  // Permite soltar diretamente no botão raio.
   daySwapHandles.forEach(function (handle) { bindDayDropTarget(handle); });
 
   if (form) {
@@ -605,11 +499,11 @@
     });
   }
 
-  document.addEventListener('drop', function () {
-    dragMode = null;
-    dragData = null;
-    dayDragSource = null;
-    clearUiSelections();
+  document.addEventListener('pointerup', function () {
+    if (pointerIsDown) {
+      resetPointerState();
+      clearUiSelections();
+    }
   });
 
   syncPayload();

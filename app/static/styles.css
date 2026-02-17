@@ -590,6 +590,46 @@ body {
   color: rgba(255,255,255,0.70);
 }
 
+.nav-section-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+  cursor: pointer;
+}
+
+.nav-section-toggle:hover .nav-section {
+  color: rgba(255,255,255,0.9);
+}
+
+.nav-chevron {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.72);
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.nav-group.is-collapsed .nav-chevron {
+  transform: rotate(-90deg);
+}
+
+.nav-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-items[hidden] {
+  display: none !important;
+}
+
 /* links com layout moderno e alinhado */
 .nav-link {
   display: flex;                 /* antes era block */
@@ -861,6 +901,29 @@ textarea{
   height: 60%;
   border-radius: 4px;
   background: #cfe7ff;
+}
+
+/* Padronizacao visual do grupo Disponibilidade */
+.sidebar .nav-group[data-group-id="disponibilidade"] .nav-section-toggle {
+  min-height: 42px;
+  border-radius: 10px;
+  padding: 0 8px;
+}
+
+.sidebar .nav-group[data-group-id="disponibilidade"] .nav-section {
+  padding: 0;
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+}
+
+.sidebar .nav-group[data-group-id="disponibilidade"] .nav-link {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
 }
 /* =========================
    PRÉ-CRONOGRAMA
